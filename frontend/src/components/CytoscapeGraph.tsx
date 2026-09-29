@@ -18,67 +18,68 @@ interface Props {
   selectedId?: string | null;
 }
 
-const getLayoutOptions = (layoutType: LayoutType, fontSize: number = 12) => {
+const getLayoutOptions = (layoutType: LayoutType, fontSize: number = 12, nodeCount: number = 0) => {
   const fontMultiplier = Math.max(0.8, fontSize / 12);
+  const isDense = nodeCount >= 60;
+  const isVeryDense = nodeCount >= 90;
+
   switch (layoutType) {
     case 'cose':
       return {
         name: 'cose',
         animate: false,
-        padding: Math.round(100 * fontMultiplier),
-        nodeDimensionsIncludeLabels: true,
-        nodeRepulsion: () => Math.round(380000 * fontMultiplier),
-        idealEdgeLength: () => Math.round(240 * fontMultiplier),
-        edgeElasticity: () => 18,
-        nestingFactor: 1.1,
-        gravity: 0.025,
-        numIter: 1400,
-        initialTemp: 400,
+        padding: Math.round(40 * fontMultiplier),
+        nodeDimensionsIncludeLabels: false, // Huge performance boost: avoid DOM text measurement per iteration
+        nodeRepulsion: () => (isVeryDense ? 4500 : isDense ? 6000 : 8000),
+        idealEdgeLength: () => (isVeryDense ? 55 : isDense ? 75 : 100),
+        edgeElasticity: () => 32,
+        nestingFactor: 1.2,
+        gravity: isVeryDense ? 0.35 : 0.2,
+        numIter: isVeryDense ? 160 : isDense ? 220 : 300, // 160-300 iterations instead of 1400 (converges in < 60ms)
+        initialTemp: 200,
         coolingFactor: 0.95,
         minTemp: 1.0,
         randomize: false,
-        componentSpacing: Math.round(300 * fontMultiplier),
+        componentSpacing: Math.round(isVeryDense ? 70 : 120),
       };
     case 'breadthfirst':
       return {
         name: 'breadthfirst',
         directed: true,
-        padding: Math.round(90 * fontMultiplier),
-        spacingFactor: 3.4 + (fontSize - 11) * 0.1,
+        padding: Math.round(40 * fontMultiplier),
+        spacingFactor: isDense ? 1.5 : 2.2,
         animate: false,
         avoidOverlap: true,
-        nodeDimensionsIncludeLabels: true,
+        nodeDimensionsIncludeLabels: false,
       };
     case 'concentric':
       return {
         name: 'concentric',
-        padding: Math.round(90 * fontMultiplier),
-        spacingFactor: 3.2 * fontMultiplier,
-        minNodeSpacing: Math.round(130 * fontMultiplier),
+        padding: Math.round(40 * fontMultiplier),
+        spacingFactor: isDense ? 1.5 : 2.0,
+        minNodeSpacing: isDense ? 35 : 60,
         avoidOverlap: true,
-        nodeDimensionsIncludeLabels: true,
+        nodeDimensionsIncludeLabels: false,
         concentric: (node: any) => (node.data('is_center') ? 10 : (node.data('type') === 'transaction' ? 5 : 1)),
         levelWidth: () => 2,
       };
     case 'circle':
       return {
         name: 'circle',
-        padding: Math.round(90 * fontMultiplier),
-        spacingFactor: 3.2 * fontMultiplier,
+        padding: Math.round(40 * fontMultiplier),
+        spacingFactor: isDense ? 1.4 : 2.0,
         avoidOverlap: true,
-        nodeDimensionsIncludeLabels: true,
+        nodeDimensionsIncludeLabels: false,
       };
     default:
       return {
         name: 'cose',
         animate: false,
-        padding: Math.round(100 * fontMultiplier),
-        nodeDimensionsIncludeLabels: true,
-        nodeRepulsion: () => Math.round(380000 * fontMultiplier),
-        idealEdgeLength: () => Math.round(240 * fontMultiplier),
-        edgeElasticity: () => 18,
-        gravity: 0.025,
-        componentSpacing: Math.round(300 * fontMultiplier),
+        padding: 40,
+        nodeDimensionsIncludeLabels: false,
+        nodeRepulsion: () => 5000,
+        idealEdgeLength: () => 80,
+        numIter: 200,
       };
   }
 };
@@ -100,6 +101,9 @@ export const CytoscapeGraph: React.FC<Props> = ({
 
   useEffect(() => {
     if (!containerRef.current) return;
+
+    const nodeCount = (data?.nodes || []).length;
+    const isVeryDense = nodeCount >= 90;
 
     const nodeIds = new Set((data?.nodes || []).map((n) => n?.data?.id).filter(Boolean));
     const validEdges = (data?.edges || []).filter((e) => {
@@ -130,6 +134,12 @@ export const CytoscapeGraph: React.FC<Props> = ({
       const cy = cytoscape({
         container: containerRef.current,
         elements: elements,
+        pixelRatio: isVeryDense ? 1 : 'auto', // Avoid huge 4K texture thrashing on dense graphs
+        textureOnViewport: true, // Hardware-accelerated viewport texture for smooth 60fps pan/zoom
+        hideEdgesOnViewport: isVeryDense, // When panning/zooming 90+ nodes, hide edges during movement
+        motionBlur: false,
+        wheelSensitivity: 0.22,
+        boxSelectionEnabled: false,
         style: [
           {
             selector: 'node',
@@ -146,10 +156,11 @@ export const CytoscapeGraph: React.FC<Props> = ({
               'text-halign': 'center',
               'text-wrap': 'ellipsis',
               'text-max-width': `${Math.round(fontSize * 6.8)}px`,
-              'text-outline-width': Math.max(2, Math.round(fontSize * 0.18)),
+              'text-outline-width': Math.max(1, Math.round(fontSize * 0.15)),
               'text-outline-color': 'data(nodeOutline)',
-              'transition-property': 'background-color, border-color, width, height',
-              'transition-duration': 0.15,
+              'min-zoomed-font-size': 6, // Native level-of-detail culling when zoomed out
+              'transition-property': 'background-color, border-color', // No width/height transitions!
+              'transition-duration': 0.12,
             },
           },
           // Address nodes
@@ -157,8 +168,8 @@ export const CytoscapeGraph: React.FC<Props> = ({
             selector: 'node[type = "address"]',
             style: {
               'shape': 'ellipse',
-              'width': Math.round(fontSize * 4.6),
-              'height': Math.round(fontSize * 4.6),
+              'width': Math.round(fontSize * 4.4),
+              'height': Math.round(fontSize * 4.4),
             },
           },
           // Transaction nodes
@@ -166,8 +177,8 @@ export const CytoscapeGraph: React.FC<Props> = ({
             selector: 'node[type = "transaction"]',
             style: {
               'shape': 'round-rectangle',
-              'width': Math.round(fontSize * 7.8),
-              'height': Math.round(fontSize * 3.4),
+              'width': Math.round(fontSize * 7.4),
+              'height': Math.round(fontSize * 3.2),
             },
           },
           // UTXO nodes
@@ -175,8 +186,8 @@ export const CytoscapeGraph: React.FC<Props> = ({
             selector: 'node[type = "utxo"]',
             style: {
               'shape': 'diamond',
-              'width': Math.round(fontSize * 4.0),
-              'height': Math.round(fontSize * 4.0),
+              'width': Math.round(fontSize * 3.8),
+              'height': Math.round(fontSize * 3.8),
             },
           },
           // Coinbase nodes
@@ -184,8 +195,8 @@ export const CytoscapeGraph: React.FC<Props> = ({
             selector: 'node[type = "coinbase"]',
             style: {
               'shape': 'hexagon',
-              'width': Math.round(fontSize * 4.6),
-              'height': Math.round(fontSize * 4.6),
+              'width': Math.round(fontSize * 4.4),
+              'height': Math.round(fontSize * 4.4),
             },
           },
           // Center / focused node
@@ -196,8 +207,9 @@ export const CytoscapeGraph: React.FC<Props> = ({
               'border-color': '#f59e0b',
               'border-style': 'solid',
               'underlay-color': '#f59e0b',
-              'underlay-padding': Math.round(fontSize * 0.6),
+              'underlay-padding': Math.round(fontSize * 0.5),
               'underlay-opacity': 0.35,
+              'z-index': 99,
             },
           },
           // Selected node
@@ -209,54 +221,69 @@ export const CytoscapeGraph: React.FC<Props> = ({
               'underlay-color': '#ffffff',
               'underlay-padding': 5,
               'underlay-opacity': 0.35,
+              'z-index': 100,
             },
           },
           // Edges
           {
             selector: 'edge',
             style: {
-              'width': 1.8,
-              'line-color': '#525252',
-              'target-arrow-color': '#525252',
+              'width': 1.4,
+              'line-color': '#454545',
+              'target-arrow-color': '#454545',
               'target-arrow-shape': 'triangle',
               'curve-style': 'bezier',
-              'control-point-step-size': 40,
-              'arrow-scale': 1.2,
-              'label': 'data(label)',
+              'control-point-step-size': 25,
+              'arrow-scale': 1.0,
+              'label': isVeryDense ? '' : 'data(label)',
+              'min-zoomed-font-size': 8, // Hide tiny edge labels when zoomed out
               'font-family': 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
               'font-size': `${Math.max(9, fontSize - 1)}px`,
               'font-weight': 600,
               'color': '#ededed',
               'text-background-color': '#0a0a0a',
-              'text-background-opacity': 0.95,
-              'text-background-padding': `${Math.max(3, Math.round(fontSize * 0.28))}px`,
-              'text-background-shape': 'roundrectangle',
-              'text-border-width': 1,
-              'text-border-color': '#262626',
-              'text-border-opacity': 0.9,
+              'text-background-opacity': 0.85,
+              'text-background-padding': '2px',
+              'text-background-shape': 'rectangle',
               'text-rotation': 'autorotate',
             },
           },
           {
             selector: 'edge[?is_center]',
             style: {
-              'width': 2.5,
+              'label': 'data(label)',
+              'width': 2.4,
               'line-color': '#ffffff',
               'target-arrow-color': '#ffffff',
+              'color': '#ffffff',
+              'text-background-opacity': 1,
+              'z-index': 99,
             },
           },
           {
             selector: 'edge:selected',
             style: {
-              'width': 3,
+              'label': 'data(label)',
+              'width': 2.8,
               'line-color': '#ffffff',
               'target-arrow-color': '#ffffff',
               'color': '#ffffff',
-              'text-border-color': '#ffffff',
+              'text-background-opacity': 1,
+              'z-index': 100,
+            },
+          },
+          {
+            selector: 'edge.hover',
+            style: {
+              'label': 'data(label)',
+              'width': 2.2,
+              'line-color': '#a3a3a3',
+              'target-arrow-color': '#a3a3a3',
+              'z-index': 90,
             },
           },
         ],
-        layout: getLayoutOptions(layout, fontSize) as any,
+        layout: getLayoutOptions(layout, fontSize, nodeCount) as any,
       });
 
       cy.on('tap', 'node', (evt: EventObject) => {
@@ -287,79 +314,20 @@ export const CytoscapeGraph: React.FC<Props> = ({
         }
       });
 
+      cy.on('mouseover', 'edge', (evt: EventObject) => {
+        evt.target.addClass('hover');
+      });
+
+      cy.on('mouseout', 'edge', (evt: EventObject) => {
+        evt.target.removeClass('hover');
+      });
+
       cy.on('tap', (evt: EventObject) => {
         if (evt.target === cy) {
           onSelectNode(null);
           onSelectEdge(null);
         }
       });
-
-      // Maintain constant on-screen circle and text sizes during zoom:
-      // In world-space, dimensions shrink inversely with zoom so that on-screen
-      // dimensions remain constant, expanding the visible space between nodes when zooming in.
-      const updateZoomScaling = () => {
-        if (!cy) return;
-        const z = cy.zoom();
-        if (!z || isNaN(z) || z <= 0) return;
-
-        const scale = 1 / Math.max(0.6, z);
-
-        cy.batch(() => {
-          cy.nodes().style({
-            'font-size': `${Math.max(3, Math.round(fontSize * scale))}px`,
-            'text-max-width': `${Math.max(15, Math.round(fontSize * 6.8 * scale))}px`,
-            'text-outline-width': Math.max(1, Math.round(fontSize * 0.18 * scale)),
-            'border-width': Math.max(1.5, 2.0 * scale),
-          });
-
-          cy.nodes('[type = "address"]').style({
-            'width': Math.round(fontSize * 4.6 * scale),
-            'height': Math.round(fontSize * 4.6 * scale),
-          });
-
-          cy.nodes('[type = "transaction"]').style({
-            'width': Math.round(fontSize * 7.8 * scale),
-            'height': Math.round(fontSize * 3.4 * scale),
-          });
-
-          cy.nodes('[type = "utxo"]').style({
-            'width': Math.round(fontSize * 4.0 * scale),
-            'height': Math.round(fontSize * 4.0 * scale),
-          });
-
-          cy.nodes('[type = "coinbase"]').style({
-            'width': Math.round(fontSize * 4.6 * scale),
-            'height': Math.round(fontSize * 4.6 * scale),
-          });
-
-          cy.nodes('[?is_center]').style({
-            'border-width': Math.max(2.5, 3.5 * scale),
-            'underlay-padding': Math.max(2, Math.round(fontSize * 0.6 * scale)),
-          });
-
-          cy.edges().style({
-            'width': Math.max(1.2, 1.8 * scale),
-            'font-size': `${Math.max(4, Math.round(Math.max(9, fontSize - 1) * scale))}px`,
-            'text-background-padding': `${Math.max(1, Math.round(fontSize * 0.28 * scale))}px`,
-          });
-        });
-      };
-
-      let rafId: number | null = null;
-      const handleZoomEvent = () => {
-        if (rafId) cancelAnimationFrame(rafId);
-        rafId = requestAnimationFrame(() => {
-          updateZoomScaling();
-        });
-      };
-
-      cy.on('zoom', handleZoomEvent);
-      cy.on('layoutstop', () => {
-        updateZoomScaling();
-      });
-
-      // Initial scale pass
-      updateZoomScaling();
 
       cyRef.current = cy;
     } catch (err) {
@@ -405,7 +373,9 @@ export const CytoscapeGraph: React.FC<Props> = ({
 
   const handleResetLayout = () => {
     if (!cyRef.current) return;
-    const l = cyRef.current.layout(getLayoutOptions(layout, fontSize) as any);
+    const l = cyRef.current.layout(
+      getLayoutOptions(layout, fontSize, data?.nodes?.length || 0) as any
+    );
     l.run();
   };
 
@@ -420,6 +390,20 @@ export const CytoscapeGraph: React.FC<Props> = ({
 
   return (
     <div className="w-full h-full relative overflow-hidden bg-black">
+      {/* Top-Left Density & Element Count Badge */}
+      <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-[#121212]/90 backdrop-blur-xs px-2.5 py-1.5 rounded-md border border-neutral-800 text-[11px] font-mono text-neutral-300 pointer-events-none shadow-md">
+        <span className="font-semibold text-white">{data?.nodes?.length || 0}</span>
+        <span>nodes</span>
+        <span className="text-neutral-600">•</span>
+        <span className="font-semibold text-white">{data?.edges?.length || 0}</span>
+        <span>edges</span>
+        {(data?.nodes?.length || 0) >= 80 && (
+          <span className="ml-1 px-1.5 py-0.2 rounded bg-neutral-800 text-neutral-300 text-[10px] font-bold border border-neutral-700">
+            Optimized
+          </span>
+        )}
+      </div>
+
       {/* Cytoscape Canvas Container */}
       <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 

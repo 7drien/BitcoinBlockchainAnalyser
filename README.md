@@ -4,7 +4,7 @@
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
-[![React 18](https://img.shields.io/badge/frontend-React%2018%20%2B%20Vite-61DAFB.svg)](https://react.dev/)
+[![React 19](https://img.shields.io/badge/frontend-React%2019%20%2B%20Vite-61DAFB.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/language-TypeScript-3178C6.svg)](https://www.typescriptlang.org/)
 [![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL%2016-336791.svg)](https://www.postgresql.org/)
 [![Bitcoin Core](https://img.shields.io/badge/node-Bitcoin%20Core-F7931A.svg)](https://bitcoincore.org/)
@@ -42,7 +42,7 @@ Unlike public blockchain explorers or SaaS-dependent tools, ChainScope operates 
 
 ### 1. Privacy & Local-First Sovereignty
 - **Zero cloud dependencies:** All data queries, graph expansions, and heuristic calculations run locally on your machine.
-- **No data leakage:** Analyzed addresses, TXIDs, search logs, analyst dossiers, and IP addresses are **never** transmitted to remote servers.
+- **No data leakage:** Analyzed addresses, TXIDs, search logs, investigation sessions, and IP addresses are **never** transmitted to remote servers.
 - **Local RPC isolation:** Bitcoin Core RPC bindings are strictly bound to localhost (`127.0.0.1`), configurable across `mainnet`, `testnet`, and `regtest`.
 
 ### 2. Forensic & Analytical Rigor
@@ -60,39 +60,44 @@ ChainScope strictly enforces distinction between:
 
 ### 🔍 Interactive Flow Graph Exploration
 - **Dual Representation Modes:**
-  - **Address Graph:** Address-to-address macroscopic flow model where nodes represent Bitcoin addresses / coinbase rewards and edges represent transactions with transfer volumes and fees.
+  - **Address Graph:** Macroscopic address-to-address flow model where nodes represent Bitcoin addresses / coinbase rewards and directed edges represent transactions with transfer volumes and fees.
   - **UTXO True DAG:** High-fidelity directed acyclic graph capturing Bitcoin's native execution model: *Parent TX &rarr; Input UTXO &rarr; Target TX &rarr; Output UTXO &rarr; Child TX*.
-- **Multi-Hop Traversal:** Recursively trace fund flows *Upstream* (funding ancestors) or *Downstream* (spending descendants) up to 4 hops.
-- **Dynamic Layout Engines:** Seamlessly switch between force-directed (`cose`), hierarchical (`breadthfirst`), concentric, and circular layouts.
-- **Constant On-Screen Node Scaling:** Inversely scaled node and text rendering ensures labels and nodes remain crisp and legible across deep zoom levels.
-- **Theming & Color Modes:** Hash-based color coding (deterministic identification) or script-type coloring (P2PKH, P2SH, P2WPKH, P2TR).
-- **Graph Exports:** Export investigation snapshots as high-resolution PNG, JSON, or GraphML for documentation and evidence sharing.
+- **Multi-Hop Traversal:** Recursively trace fund flows *Upstream* (funding sources) or *Downstream* (spending outputs) across 1 to 3 hops in the UI (up to 4 hops in the backend API).
+- **Dynamic Layout Engines:** Seamlessly switch between force-directed clustering (`cose`), hierarchical flow tree (`breadthfirst`), concentric, and circular layouts.
+- **Hardware-Accelerated Canvas & Label Scaling:** Viewport texture caching for 60fps pan/zoom on dense graphs, accompanied by zoom-responsive label font scaling (10px to 16px with dedicated `A+` / `A-` controls).
+- **Theming & Color Modes:**
+  - **Monochrome Entity (`hash`):** Deterministic high-contrast hue mapping uniquely assigned per entity hash for instant visual differentiation.
+  - **Entity Type (`type`):** Clean semantic color coding (Emerald for addresses, Purple for transactions, Amber for UTXOs/coinbase).
+- **Graph Exports:** Export full-resolution PNG canvas snapshots directly from the graph controls overlay.
 
 ### ⚡ Real-Time In-Memory Filtering (Zero Latency)
-Instant filtering applied directly in memory to isolate transactions without round-trip network delays:
-- **Address Filter:** Substring match on TXIDs, input addresses, output addresses, and connected graph nodes.
-- **Volume Range:** Filter by transferred amount in **BTC** or **Satoshis**.
+Instant filtering applied directly in client memory to isolate transactions without round-trip network delays:
+- **Address & TXID Filter:** Substring match across TXIDs, input addresses, output addresses, and connected graph nodes.
+- **Volume Range:** Filter by transferred amount in **BTC** or **Satoshis** with instant unit toggle.
 - **Block Height Range:** Restrict visibility to transactions confirmed between specific block heights.
-- **Input / Output Count Limits:** Filter by structural size (e.g., transactions with $\ge 5$ inputs).
-- **Flow Patterns:** Instant preset filtering for *Peel Chains*, *UTXO Consolidations*, *Batch Payments*, and *CoinJoin-like* patterns.
+- **Input / Output Count Limits:** Filter by structural size (min/max inputs & outputs).
+- **Flow Patterns:** Instant preset filtering for *Peel Chain (1 in, 2 out)*, *UTXO Consolidation (≥2 in, ≤2 out)*, *Batch Payment (≤3 in, ≥3 out)*, and *CoinJoin-like (≥3 in, ≥3 out)* patterns.
 - **Empty State Recovery:** Clear visual indicator and one-click filter reset when filter criteria exclude all elements.
 
 ### 📋 Structured Table View (`TextView`)
 - A dedicated tabular interface togglable alongside the Cytoscape graph canvas.
-- Sort and search across all transactions and addresses present in the current session.
-- One-click TXID copying, block confirmation indicators, and instant node exploration triggers.
+- Separate dedicated tabs for **Transactions** and **Addresses** with real-time substring search filtering.
+- One-click TXID and address copying, block confirmation indicators, transfer amounts in BTC/satoshis, fee stats, and instant node exploration triggers.
 
 ### 🔬 Inspector Panel
-- Deep inspection sidebar for any selected transaction, address, or UTXO node:
-  - Balances, total received, total spent, and transaction counters.
-  - Address script classification (P2PKH, P2SH, P2WPKH, P2WSH, Taproot P2TR).
-  - Transaction vsize, fee, fee rate (sat/vB), and timestamp.
-  - Triggered heuristic findings with transparent justifications and underlying evidence payloads.
+- Deep inspection sidebar for any selected transaction, address, UTXO node, or transfer edge:
+  - Current balance, total received, total spent, and transaction counters.
+  - Script type classification (P2PKH, P2SH, P2WPKH, P2WSH, Taproot P2TR).
+  - Transaction vsize, fee, fee rate (sat/vB), timestamp, and block height.
+  - Detailed Senders (Inputs) and Recipients (Outputs) breakdown with click-to-inspect navigation.
+  - Multi-hop flow exploration shortcuts (*Trace Upstream*, *Trace Spends*, *Center & Expand*).
+  - Direct links to **mempool.space** for independent verification.
+  - Triggered heuristic findings with transparent justifications, confidence levels, and collapsible JSON evidence payloads.
 
-### 📁 Forensic Investigations & Dossiers
-- Create reproducible investigation sessions tied to specific block heights and parameters.
-- Record analyst notes and assign investigative tags.
-- Generate comprehensive standalone HTML/PDF forensic dossiers detailing the graph topology, suspicious patterns, heuristic justifications, and data verification hashes.
+### 💾 Automatic Local Session Persistence
+- **Continuous Local Synchronization:** Ongoing workspace state is automatically persisted locally via browser `localStorage` (`chainscope_session_v3`).
+- **Full State Restoration:** Seamlessly restores your active search query, selected target entity, graph mode (Address vs UTXO), layout engine, traversal depth, flow direction (upstream/downstream/both), font size, color mode, view mode (Graph vs Table), all active filters, and heuristic rules upon page reload.
+- **Uncluttered Analyst Workflow:** Eliminates manual file saving and dossier management overhead in the UI; your investigation state is maintained securely and entirely client-side.
 
 ---
 
@@ -179,7 +184,7 @@ ChainScope includes a modular rules engine evaluating **12 distinct forensic heu
 - **MyPy** (Static typing)
 
 ### Frontend
-- **React 18** & **TypeScript**
+- **React 19** & **TypeScript**
 - **Vite** (Build tool & development server)
 - **Cytoscape.js** (High-performance graph visualization canvas)
 - **Tailwind CSS v4** (Modern styling system)
@@ -210,7 +215,7 @@ chainscope/
 │
 ├── frontend/                    # React + TypeScript single-page application
 │   ├── src/
-│   │   ├── components/          # CytoscapeGraph, Header, LeftSidebar, InspectorPanel, TextView
+│   │   ├── components/          # CytoscapeGraph, Header, LeftSidebar, InspectorPanel, TextView, InfoTooltip
 │   │   ├── lib/                 # Color computation, canvas utilities
 │   │   ├── types/               # TypeScript data definitions
 │   │   ├── App.tsx              # Main orchestrator & in-memory filter engine
@@ -224,7 +229,7 @@ chainscope/
 │   ├── forensic/                # 12 forensic heuristic analyzer modules
 │   ├── graph/                   # Cytoscape graph topology builder
 │   ├── search/                  # Multi-parameter SQL search engine
-│   └── reports/                 # Standalone HTML forensic dossier generator
+│   └── reports/                 # Standalone HTML forensic report generator
 │
 ├── docker/                      # Docker configurations
 ├── migrations/                  # Alembic database migrations

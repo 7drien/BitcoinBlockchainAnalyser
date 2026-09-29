@@ -80,8 +80,22 @@ class GraphBuilder:
                         "balance_sats": out.value_sats,
                     }
 
+        max_edges = max(120, max_nodes * 2)
+
+        for tx in transactions:
+            if len(edges_list) >= max_edges:
+                break
+
+            # If transaction has many inputs and outputs (e.g. consolidation or batch),
+            # cap cross-product to top outputs by value to prevent combinatorial edge explosion
+            out_candidates = tx.outputs
+            if len(tx.inputs) > 3 and len(tx.outputs) > 4:
+                out_candidates = sorted(tx.outputs, key=lambda o: o.value_sats, reverse=True)[:4]
+
             # Create edges from inputs to outputs
             for inp in tx.inputs:
+                if len(edges_list) >= max_edges:
+                    break
                 in_addr = inp.address
                 if not in_addr or in_addr == "Coinbase Reward":
                     in_addr = f"coinbase:{tx.txid[:8]}"
@@ -89,7 +103,9 @@ class GraphBuilder:
                 if in_addr not in nodes_dict:
                     continue
 
-                for out in tx.outputs:
+                for out in out_candidates:
+                    if len(edges_list) >= max_edges:
+                        break
                     if not out.address or out.address not in nodes_dict:
                         continue
                     if in_addr == out.address and len(tx.outputs) > 1:
@@ -254,6 +270,8 @@ class GraphBuilder:
                 ],
             }
 
+        max_edges = max(150, max_nodes * 2)
+
         # 2. Second pass: Create outputs (UTXOs created by these transactions)
         for tx in transactions:
             tx_node_id = f"tx:{tx.txid}"
@@ -276,7 +294,7 @@ class GraphBuilder:
                         "output_index": out.index,
                     }
 
-                if utxo_id in nodes_dict:
+                if utxo_id in nodes_dict and len(edges_list) < max_edges:
                     edges_list.append(
                         {
                             "id": f"edge:{tx_node_id}->{utxo_id}",
@@ -309,7 +327,7 @@ class GraphBuilder:
                             "output_index": inp.vout,
                         }
 
-                    if prev_utxo_id in nodes_dict:
+                    if prev_utxo_id in nodes_dict and len(edges_list) < max_edges:
                         edges_list.append(
                             {
                                 "id": f"edge:{prev_utxo_id}->{tx_node_id}",
@@ -331,17 +349,18 @@ class GraphBuilder:
                             "value_sats": inp.value_sats,
                             "value_btc": sats_to_btc(inp.value_sats),
                         }
-                    edges_list.append(
-                        {
-                            "id": f"edge:{cb_id}->{tx_node_id}",
-                            "source": cb_id,
-                            "target": tx_node_id,
-                            "type": "mints",
-                            "txid": tx.txid,
-                            "amount_sats": inp.value_sats,
-                            "label": "mints",
-                        }
-                    )
+                    if len(edges_list) < max_edges:
+                        edges_list.append(
+                            {
+                                "id": f"edge:{cb_id}->{tx_node_id}",
+                                "source": cb_id,
+                                "target": tx_node_id,
+                                "type": "mints",
+                                "txid": tx.txid,
+                                "amount_sats": inp.value_sats,
+                                "label": "mints",
+                            }
+                        )
 
         valid_nodes_utxo = set(nodes_dict.keys())
         filtered_edges_utxo = [
