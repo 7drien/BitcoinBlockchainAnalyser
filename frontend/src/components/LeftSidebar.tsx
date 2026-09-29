@@ -1,198 +1,213 @@
 import React, { useState } from 'react';
-import { SlidersHorizontal, ActivitySquare, FileText, Play, RotateCcw, ArrowUpRight, Search, CornerDownLeft } from 'lucide-react';
-import type { Investigation } from '../types';
+import { SlidersHorizontal, ActivitySquare, Play, RotateCcw, ArrowUpRight } from 'lucide-react';
 import { getNodeColors } from '../lib/colors';
+import { InfoTooltip } from './InfoTooltip';
+
+export interface FilterState {
+  address: string;
+  unit: 'btc' | 'sats';
+  minAmount: string;
+  maxAmount: string;
+  pattern: string;
+  minHeight: string;
+  maxHeight: string;
+  minInputs: string;
+  maxInputs: string;
+  minOutputs: string;
+  maxOutputs: string;
+}
 
 interface Props {
-  investigation: Investigation | null;
   enabledHeuristics: Record<string, boolean>;
   onToggleHeuristic: (name: string) => void;
   onRunAnalysis: () => void;
   isAnalyzing: boolean;
-  isFiltering?: boolean;
-  onApplyFilter: (filters: any) => void;
+  filterValues: FilterState;
+  onFilterChange: (filters: Partial<FilterState>) => void;
+  onResetFilter: () => void;
   onSelectTransaction: (txid: string) => void;
-  filterResults?: any[];
-  selectedSubject?: string;
+  matchingTransactions: any[];
 }
 
 export const LeftSidebar: React.FC<Props> = ({
-  investigation,
   enabledHeuristics,
   onToggleHeuristic,
   onRunAnalysis,
   isAnalyzing,
-  isFiltering = false,
-  onApplyFilter,
+  filterValues,
+  onFilterChange,
+  onResetFilter,
   onSelectTransaction,
-  filterResults = [],
-  selectedSubject = '',
+  matchingTransactions,
 }) => {
-  const [activeTab, setActiveTab] = useState<'filter' | 'heuristics' | 'dossier'>('filter');
-
-  // Filter form state
-  const [filterAddress, setFilterAddress] = useState<string>('');
-  const [amountUnit, setAmountUnit] = useState<'btc' | 'sats'>('btc');
-  const [minAmount, setMinAmount] = useState<string>('');
-  const [maxAmount, setMaxAmount] = useState<string>('');
-  const [minHeight, setMinHeight] = useState<string>('');
-  const [maxHeight, setMaxHeight] = useState<string>('');
-  const [minInputs, setMinInputs] = useState<string>('');
-  const [maxInputs, setMaxInputs] = useState<string>('');
-  const [minOutputs, setMinOutputs] = useState<string>('');
-  const [maxOutputs, setMaxOutputs] = useState<string>('');
-  const [selectedPattern, setSelectedPattern] = useState<string>('all');
-
-  // Notes state
-  const [analystNotes, setAnalystNotes] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'filter' | 'heuristics'>('filter');
 
   const heuristicsList = [
-    { id: 'common_input_ownership', label: 'Common-input ownership', severity: 'info', desc: 'Clusters multiple addresses in inputs (attenuated on CoinJoin)' },
-    { id: 'change_address_detection', label: 'Change address detection', severity: 'info', desc: 'Script matching & unrounded remainder detection' },
-    { id: 'address_reuse', label: 'Address reuse', severity: 'warning', desc: 'Identifies addresses reused across inputs/outputs' },
-    { id: 'peel_chain', label: 'Peel chain pattern', severity: 'info', desc: 'Sequential peeling of small payment outputs' },
-    { id: 'consolidation', label: 'Consolidation', severity: 'info', desc: 'Many inputs merged into 1 or 2 outputs' },
-    { id: 'fan_in', label: 'Fan-in pattern', severity: 'info', desc: 'Convergence of multiple distinct addresses' },
-    { id: 'fan_out', label: 'Fan-out pattern', severity: 'info', desc: 'Dispersion of funds into many recipient outputs' },
-    { id: 'batch_payment', label: 'Batch payment', severity: 'info', desc: 'Commercial payout structure with heterogeneous values' },
-    { id: 'coinjoin_suspicion', label: 'CoinJoin-like pattern', severity: 'warning', desc: 'Equal-denomination outputs with multiple participants' },
-    { id: 'dust_detection', label: 'Dust & micro amounts', severity: 'warning', desc: 'Outputs <= 546 satoshis (dusting attacks)' },
-    { id: 'round_amounts', label: 'Round amounts (Contextual)', severity: 'info', desc: 'Clean decimal values (informational only)' },
-    { id: 'chain_transaction', label: 'Chained rapid transactions', severity: 'info', desc: 'Rapid sequential child-spends' },
+    {
+      id: 'common_input_ownership',
+      label: 'Common-Input Ownership (CIOH)',
+      tag: 'Clustering',
+      desc: 'Assumes all input addresses in a multi-input transaction belong to the same entity. Invalidated on CoinJoin.',
+      detail: 'Foundational rule for Bitcoin wallet clustering. If multiple addresses co-sign inputs to fund a transaction, they are presumed to be under common control.',
+    },
+    {
+      id: 'change_address_detection',
+      label: 'Change Address Detection',
+      tag: 'Change Output',
+      desc: 'Identifies the output likely returning change to the sender based on script matching, unrounded satoshi value, or fresh address status.',
+      detail: 'Because Bitcoin transactions consume whole UTXOs, any remainder after miner fees is sent back to a newly generated change address controlled by the sender.',
+    },
+    {
+      id: 'address_reuse',
+      label: 'Address Reuse',
+      tag: 'Privacy Loss',
+      desc: 'Identifies addresses reused across multiple transactions, compromising recipient privacy and enabling clustering.',
+      detail: 'Address reuse directly links distinct on-chain activities, allowing observers to map wallet balances and counterparties.',
+    },
+    {
+      id: 'peel_chain',
+      label: 'Peel Chain Pattern',
+      tag: 'Sequential Flow',
+      desc: 'Successive transactions where a large sum is peeled off step-by-step (one small payment output, with remainder forwarded to a fresh change address).',
+      detail: 'A classic pattern seen in automated withdrawals, payroll, or money laundering sequences.',
+    },
+    {
+      id: 'consolidation',
+      label: 'UTXO Consolidation',
+      tag: 'Merge',
+      desc: 'Merges many small input UTXOs into 1 or 2 outputs, typically executed to minimize future transaction fees.',
+      detail: 'Frequently performed by exchanges, services, and advanced users during periods of low mempool fee rates.',
+    },
+    {
+      id: 'fan_in',
+      label: 'Convergence (Fan-in)',
+      tag: 'Aggregation',
+      desc: 'Multiple distinct source addresses converge to fund a single destination or transaction.',
+      detail: 'Commonly represents treasury sweeps or sweeping scattered balances into cold storage.',
+    },
+    {
+      id: 'fan_out',
+      label: 'Dispersion (Fan-out)',
+      tag: 'Distribution',
+      desc: 'A single transaction distributes funds across numerous recipient outputs.',
+      detail: 'Standard distribution structure for payments, dividends, or dispersing funds across multiple addresses.',
+    },
+    {
+      id: 'batch_payment',
+      label: 'Batch Payment',
+      tag: 'Commercial',
+      desc: 'Commercial payout structure with few inputs and many diverse outputs, reducing aggregate blockchain fees.',
+      detail: 'Standard operational procedure for Bitcoin exchanges and payment processors to optimize byte space.',
+    },
+    {
+      id: 'coinjoin_suspicion',
+      label: 'CoinJoin-like Pattern',
+      tag: 'Mixing',
+      desc: 'Collaborative transaction with multiple inputs and multiple outputs of identical satoshi denominations.',
+      detail: 'Equalizes output amounts (e.g. 0.1 BTC each) to break deterministic transaction graph linkability.',
+    },
+    {
+      id: 'dust_detection',
+      label: 'Dust Output',
+      tag: 'Micro-Amount',
+      desc: 'Very small outputs (≤ 546 satoshis), often indicating dusting attacks or tracking probes.',
+      detail: 'Dusting attempts to trick users into spending tainted micro-UTXOs alongside their main balance, revealing wallet ownership.',
+    },
+    {
+      id: 'round_amounts',
+      label: 'Round Amount Indicator',
+      tag: 'Contextual',
+      desc: 'Clean integer or decimal values (e.g. 0.1 BTC, 1.0 BTC), typically indicating the actual payment output.',
+      detail: 'Human spenders usually pay rounded amounts, while change outputs absorb decimal fractions and miner fees.',
+    },
+    {
+      id: 'chain_transaction',
+      label: 'Rapid Chained Transactions',
+      tag: 'Cascade',
+      desc: 'Immediate successive spends of newly created outputs across consecutive blocks without delay.',
+      detail: 'Indicates automated scripting, rapid forwarding, or urgent relay mechanisms.',
+    },
   ];
 
-  const toSats = (val: string): number | undefined => {
-    if (!val.trim()) return undefined;
-    const num = parseFloat(val);
-    if (isNaN(num)) return undefined;
-    if (amountUnit === 'btc') {
-      return Math.round(num * 100_000_000);
-    }
-    return Math.round(num);
-  };
-
-  const handleFilterSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    onApplyFilter({
-      address: filterAddress.trim() || undefined,
-      min_amount_sats: toSats(minAmount),
-      max_amount_sats: toSats(maxAmount),
-      min_height: minHeight ? parseInt(minHeight, 10) : undefined,
-      max_height: maxHeight ? parseInt(maxHeight, 10) : undefined,
-      min_inputs: minInputs ? parseInt(minInputs, 10) : undefined,
-      max_inputs: maxInputs ? parseInt(maxInputs, 10) : undefined,
-      min_outputs: minOutputs ? parseInt(minOutputs, 10) : undefined,
-      max_outputs: maxOutputs ? parseInt(maxOutputs, 10) : undefined,
-      pattern: selectedPattern !== 'all' ? selectedPattern : undefined,
-    });
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleFilterSubmit();
-    }
-  };
-
-  const handleResetFilter = () => {
-    setFilterAddress('');
-    setMinAmount('');
-    setMaxAmount('');
-    setMinHeight('');
-    setMaxHeight('');
-    setMinInputs('');
-    setMaxInputs('');
-    setMinOutputs('');
-    setMaxOutputs('');
-    setSelectedPattern('all');
-    onApplyFilter({});
-  };
-
-  const handleOpenReport = () => {
-    if (investigation?.id) {
-      window.open(`http://localhost:8000/api/investigations/${investigation.id}/report`, '_blank');
-    }
-  };
-
   return (
-    <aside className="w-84 border-r border-slate-800 bg-[#0e1117] flex flex-col select-none text-xs font-sans shadow-sm">
+    <aside className="w-84 border-r border-neutral-800 bg-[#0a0a0a] flex flex-col select-none text-xs font-sans shadow-xs">
       {/* Sidebar Tab Switcher */}
-      <div className="flex border-b border-slate-800 bg-[#0a0d13] p-1.5 gap-1">
+      <div className="flex border-b border-neutral-800 bg-[#050505] p-1.5 gap-1">
         <button
+          type="button"
           onClick={() => setActiveTab('filter')}
           className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 rounded transition-all font-semibold text-xs cursor-pointer ${
             activeTab === 'filter'
-              ? 'bg-[#1a1e28] text-amber-400 border border-slate-700 shadow-xs'
-              : 'text-slate-400 hover:text-white hover:bg-[#14171f]'
+              ? 'bg-[#1c1c1c] text-white border border-neutral-700 shadow-xs'
+              : 'text-neutral-400 hover:text-white hover:bg-[#141414]'
           }`}
         >
-          <SlidersHorizontal size={13} className={activeTab === 'filter' ? 'text-amber-400' : 'text-slate-400'} />
+          <SlidersHorizontal size={13} className={activeTab === 'filter' ? 'text-white' : 'text-neutral-500'} />
           <span>Filters</span>
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('heuristics')}
           className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 rounded transition-all font-semibold text-xs cursor-pointer ${
             activeTab === 'heuristics'
-              ? 'bg-[#1a1e28] text-amber-400 border border-slate-700 shadow-xs'
-              : 'text-slate-400 hover:text-white hover:bg-[#14171f]'
+              ? 'bg-[#1c1c1c] text-white border border-neutral-700 shadow-xs'
+              : 'text-neutral-400 hover:text-white hover:bg-[#141414]'
           }`}
         >
-          <ActivitySquare size={13} className={activeTab === 'heuristics' ? 'text-amber-400' : 'text-slate-400'} />
-          <span>Forensics</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('dossier')}
-          className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 rounded transition-all font-semibold text-xs cursor-pointer ${
-            activeTab === 'dossier'
-              ? 'bg-[#1a1e28] text-amber-400 border border-slate-700 shadow-xs'
-              : 'text-slate-400 hover:text-white hover:bg-[#14171f]'
-          }`}
-        >
-          <FileText size={13} className={activeTab === 'dossier' ? 'text-amber-400' : 'text-slate-400'} />
-          <span>Dossier</span>
+          <ActivitySquare size={13} className={activeTab === 'heuristics' ? 'text-white' : 'text-neutral-500'} />
+          <span>Heuristics</span>
         </button>
       </div>
 
-      {/* Tab 1: Parametric Query Filter */}
+      {/* Tab 1: Local Real-time Filters */}
       {activeTab === 'filter' && (
         <div className="flex-1 overflow-y-auto flex flex-col">
-          <form onSubmit={handleFilterSubmit} className="p-3.5 space-y-3.5 border-b border-slate-800/90 bg-[#0c0f15]/50">
+          <div className="p-3.5 space-y-3.5 border-b border-neutral-800 bg-[#0a0a0a]">
             {/* Address Search */}
             <div>
-              <label className="text-[10px] font-mono text-slate-300 uppercase tracking-wider font-semibold mb-1 block">
-                Address Filter
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-mono text-neutral-300 uppercase tracking-wider font-semibold">
+                  Address Filter
+                </label>
+                <InfoTooltip content="Instantly filters nodes or transactions containing this address substring." />
+              </div>
               <input
                 type="text"
-                placeholder="e.g. bc1q... or 1..."
-                value={filterAddress}
-                onChange={(e) => setFilterAddress(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="w-full bg-[#14171f] border border-slate-700/80 rounded px-2.5 py-1.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition-colors"
+                placeholder="e.g. 1A1z... or bc1q..."
+                value={filterValues.address}
+                onChange={(e) => onFilterChange({ address: e.target.value })}
+                className="w-full bg-[#141414] border border-neutral-800 rounded px-2.5 py-1.5 text-xs font-mono text-white placeholder-neutral-500 focus:outline-none focus:border-white transition-colors"
               />
             </div>
 
             {/* Amount Range with Unit Selector */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-[10px] font-mono text-slate-300 uppercase tracking-wider font-semibold">
-                  Total Output Amount
-                </label>
-                <div className="flex items-center rounded border border-slate-700 overflow-hidden text-[10px] font-mono bg-[#14171f]">
+                <div className="flex items-center gap-1">
+                  <label className="text-[10px] font-mono text-neutral-300 uppercase tracking-wider font-semibold">
+                    Total Output Amount
+                  </label>
+                  <InfoTooltip content="Filters transactions by total output value transferred (in BTC or Satoshis)." />
+                </div>
+                <div className="flex items-center rounded border border-neutral-700 overflow-hidden text-[10px] font-mono bg-[#141414]">
                   <button
                     type="button"
-                    onClick={() => setAmountUnit('btc')}
+                    onClick={() => onFilterChange({ unit: 'btc' })}
                     className={`px-2 py-0.5 transition-colors cursor-pointer ${
-                      amountUnit === 'btc' ? 'bg-slate-200 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
+                      filterValues.unit === 'btc'
+                        ? 'bg-white text-black font-bold'
+                        : 'text-neutral-400 hover:text-white'
                     }`}
                   >
                     BTC
                   </button>
                   <button
                     type="button"
-                    onClick={() => setAmountUnit('sats')}
+                    onClick={() => onFilterChange({ unit: 'sats' })}
                     className={`px-2 py-0.5 transition-colors cursor-pointer ${
-                      amountUnit === 'sats' ? 'bg-slate-200 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
+                      filterValues.unit === 'sats'
+                        ? 'bg-white text-black font-bold'
+                        : 'text-neutral-400 hover:text-white'
                     }`}
                   >
                     Sats
@@ -203,63 +218,65 @@ export const LeftSidebar: React.FC<Props> = ({
                 <input
                   type="number"
                   step="any"
-                  placeholder={amountUnit === 'btc' ? 'Min (e.g. 0.001)' : 'Min sats'}
-                  value={minAmount}
-                  onChange={(e) => setMinAmount(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="bg-[#14171f] border border-slate-700/80 rounded px-2 py-1.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition-colors"
+                  placeholder={filterValues.unit === 'btc' ? 'Min (e.g. 0.01)' : 'Min sats'}
+                  value={filterValues.minAmount}
+                  onChange={(e) => onFilterChange({ minAmount: e.target.value })}
+                  className="bg-[#141414] border border-neutral-800 rounded px-2 py-1.5 text-xs font-mono text-white placeholder-neutral-500 focus:outline-none focus:border-white transition-colors"
                 />
                 <input
                   type="number"
                   step="any"
-                  placeholder={amountUnit === 'btc' ? 'Max (e.g. 5.0)' : 'Max sats'}
-                  value={maxAmount}
-                  onChange={(e) => setMaxAmount(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="bg-[#14171f] border border-slate-700/80 rounded px-2 py-1.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition-colors"
+                  placeholder={filterValues.unit === 'btc' ? 'Max (e.g. 10.0)' : 'Max sats'}
+                  value={filterValues.maxAmount}
+                  onChange={(e) => onFilterChange({ maxAmount: e.target.value })}
+                  className="bg-[#141414] border border-neutral-800 rounded px-2 py-1.5 text-xs font-mono text-white placeholder-neutral-500 focus:outline-none focus:border-white transition-colors"
                 />
               </div>
             </div>
 
             {/* Pattern Filter */}
             <div>
-              <label className="text-[10px] font-mono text-slate-300 uppercase tracking-wider font-semibold mb-1 block">
-                Forensic Pattern
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-mono text-neutral-300 uppercase tracking-wider font-semibold">
+                  Flow Pattern
+                </label>
+                <InfoTooltip content="Filters transactions matching specific structural topologies (Consolidation, Peel Chain, etc.)." />
+              </div>
               <select
-                value={selectedPattern}
-                onChange={(e) => setSelectedPattern(e.target.value)}
-                className="w-full bg-[#14171f] border border-slate-700/80 rounded px-2.5 py-1.5 text-xs font-mono text-slate-100 font-medium focus:outline-none focus:border-amber-500 cursor-pointer"
+                value={filterValues.pattern}
+                onChange={(e) => onFilterChange({ pattern: e.target.value })}
+                className="w-full bg-[#141414] border border-neutral-800 rounded px-2.5 py-1.5 text-xs font-mono text-white font-medium focus:outline-none focus:border-white cursor-pointer"
               >
                 <option value="all">All Transactions</option>
                 <option value="peel">Peel Chain (1 in, 2 out)</option>
-                <option value="consolidation">Consolidation (&ge;2 in, &le;2 out)</option>
-                <option value="batch">Batch Distribution (&le;3 in, &ge;3 out)</option>
-                <option value="coinjoin">CoinJoin-like (&ge;3 in, &ge;3 out)</option>
+                <option value="consolidation">Consolidation (≥2 in, ≤2 out)</option>
+                <option value="batch">Batch Payment (≤3 in, ≥3 out)</option>
+                <option value="coinjoin">CoinJoin-like (≥3 in, ≥3 out)</option>
               </select>
             </div>
 
             {/* Block Height Range */}
             <div>
-              <label className="text-[10px] font-mono text-slate-300 uppercase tracking-wider font-semibold mb-1 block">
-                Block Height Range
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-mono text-neutral-300 uppercase tracking-wider font-semibold">
+                  Block Height Range
+                </label>
+                <InfoTooltip content="Restricts display to transactions confirmed within specified block heights." />
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="number"
                   placeholder="Min Height"
-                  value={minHeight}
-                  onChange={(e) => setMinHeight(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="bg-[#14171f] border border-slate-700/80 rounded px-2 py-1.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition-colors"
+                  value={filterValues.minHeight}
+                  onChange={(e) => onFilterChange({ minHeight: e.target.value })}
+                  className="bg-[#141414] border border-neutral-800 rounded px-2 py-1.5 text-xs font-mono text-white placeholder-neutral-500 focus:outline-none focus:border-white transition-colors"
                 />
                 <input
                   type="number"
                   placeholder="Max Height"
-                  value={maxHeight}
-                  onChange={(e) => setMaxHeight(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="bg-[#14171f] border border-slate-700/80 rounded px-2 py-1.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition-colors"
+                  value={filterValues.maxHeight}
+                  onChange={(e) => onFilterChange({ maxHeight: e.target.value })}
+                  className="bg-[#141414] border border-neutral-800 rounded px-2 py-1.5 text-xs font-mono text-white placeholder-neutral-500 focus:outline-none focus:border-white transition-colors"
                 />
               </div>
             </div>
@@ -267,127 +284,114 @@ export const LeftSidebar: React.FC<Props> = ({
             {/* Input / Output Counts */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[10px] font-mono text-slate-300 uppercase tracking-wider font-semibold mb-1 block">
+                <label className="text-[10px] font-mono text-neutral-300 uppercase tracking-wider font-semibold mb-1 block">
                   Inputs (Min/Max)
                 </label>
                 <div className="flex gap-1">
                   <input
                     type="number"
                     placeholder="Min"
-                    value={minInputs}
-                    onChange={(e) => setMinInputs(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    className="w-1/2 bg-[#14171f] border border-slate-700/80 rounded px-1.5 py-1 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    value={filterValues.minInputs}
+                    onChange={(e) => onFilterChange({ minInputs: e.target.value })}
+                    className="w-1/2 bg-[#141414] border border-neutral-800 rounded px-1.5 py-1 text-xs font-mono text-white placeholder-neutral-500 focus:outline-none focus:border-white"
                   />
                   <input
                     type="number"
                     placeholder="Max"
-                    value={maxInputs}
-                    onChange={(e) => setMaxInputs(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    className="w-1/2 bg-[#14171f] border border-slate-700/80 rounded px-1.5 py-1 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    value={filterValues.maxInputs}
+                    onChange={(e) => onFilterChange({ maxInputs: e.target.value })}
+                    className="w-1/2 bg-[#141414] border border-neutral-800 rounded px-1.5 py-1 text-xs font-mono text-white placeholder-neutral-500 focus:outline-none focus:border-white"
                   />
                 </div>
               </div>
               <div>
-                <label className="text-[10px] font-mono text-slate-300 uppercase tracking-wider font-semibold mb-1 block">
+                <label className="text-[10px] font-mono text-neutral-300 uppercase tracking-wider font-semibold mb-1 block">
                   Outputs (Min/Max)
                 </label>
                 <div className="flex gap-1">
                   <input
                     type="number"
                     placeholder="Min"
-                    value={minOutputs}
-                    onChange={(e) => setMinOutputs(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    className="w-1/2 bg-[#14171f] border border-slate-700/80 rounded px-1.5 py-1 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    value={filterValues.minOutputs}
+                    onChange={(e) => onFilterChange({ minOutputs: e.target.value })}
+                    className="w-1/2 bg-[#141414] border border-neutral-800 rounded px-1.5 py-1 text-xs font-mono text-white placeholder-neutral-500 focus:outline-none focus:border-white"
                   />
                   <input
                     type="number"
                     placeholder="Max"
-                    value={maxOutputs}
-                    onChange={(e) => setMaxOutputs(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    className="w-1/2 bg-[#14171f] border border-slate-700/80 rounded px-1.5 py-1 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    value={filterValues.maxOutputs}
+                    onChange={(e) => onFilterChange({ maxOutputs: e.target.value })}
+                    className="w-1/2 bg-[#141414] border border-neutral-800 rounded px-1.5 py-1 text-xs font-mono text-white placeholder-neutral-500 focus:outline-none focus:border-white"
                   />
                 </div>
               </div>
             </div>
 
             {/* Filter Actions */}
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                type="submit"
-                disabled={isFiltering}
-                className="flex-1 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-slate-950 font-bold rounded flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-xs shadow-xs"
-              >
-                {isFiltering ? (
-                  <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-slate-950" />
-                ) : (
-                  <>
-                    <Search size={13} />
-                    <span>Apply Filter</span>
-                    <CornerDownLeft size={11} className="text-slate-950" />
-                  </>
-                )}
-              </button>
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[10px] text-neutral-500 font-mono">
+                Instant in-memory filter (0 requests)
+              </span>
               <button
                 type="button"
-                onClick={handleResetFilter}
-                disabled={isFiltering}
-                className="px-3 py-2 bg-[#181c26] hover:bg-[#202533] disabled:opacity-50 text-slate-300 hover:text-white border border-slate-700 rounded flex items-center justify-center transition-colors cursor-pointer"
-                title="Reset Filters"
+                onClick={onResetFilter}
+                className="px-2.5 py-1.5 bg-[#171717] hover:bg-[#262626] text-neutral-300 hover:text-white border border-neutral-700 rounded flex items-center gap-1.5 transition-colors cursor-pointer text-xs font-semibold"
+                title="Reset all filters"
               >
-                <RotateCcw size={13} />
+                <RotateCcw size={12} />
+                <span>Reset</span>
               </button>
             </div>
-          </form>
+          </div>
 
           {/* Filter Matching Results List */}
           <div className="flex-1 p-3 overflow-y-auto space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-mono text-slate-300 px-1 pb-1 border-b border-slate-800 font-semibold">
+            <div className="flex items-center justify-between text-[11px] font-mono text-neutral-300 px-1 pb-1 border-b border-neutral-800 font-semibold">
               <span>MATCHING TRANSACTIONS</span>
-              <span className="px-2 py-0.2 rounded bg-[#181c26] text-amber-400 border border-amber-600/40 text-[10px] font-bold">
-                {filterResults.length}
+              <span className="px-2 py-0.2 rounded bg-[#171717] text-white border border-neutral-600 text-[10px] font-bold">
+                {matchingTransactions.length}
               </span>
             </div>
 
-            {filterResults.length === 0 ? (
-              <div className="py-8 text-center text-slate-400 font-mono text-[11px]">
-                No active filter matches found.
+            {matchingTransactions.length === 0 ? (
+              <div className="py-8 text-center text-neutral-500 font-mono text-[11px]">
+                No transactions match active filter criteria.
               </div>
             ) : (
-              filterResults.map((tx) => {
-                const txColors = getNodeColors({ type: 'transaction', full_id: tx.txid }, 'hash');
+              matchingTransactions.map((tx) => {
+                const cleanTxid = (tx.full_id || tx.txid || (tx.id?.startsWith('tx:') ? tx.id.slice(3) : tx.id) || '');
+                const txColors = getNodeColors({ type: 'transaction', full_id: cleanTxid }, 'hash');
+                const totalBtc = tx.total_output_sats
+                  ? (tx.total_output_sats / 100_000_000).toFixed(4)
+                  : tx.amount_btc ? tx.amount_btc.toFixed(4) : '0.0000';
+
                 return (
                   <div
-                    key={tx.txid}
-                    onClick={() => onSelectTransaction(tx.txid)}
-                    className="p-2.5 rounded-lg bg-[#14171f] hover:bg-[#1c222e] border border-slate-800 hover:border-slate-600 transition-all cursor-pointer group shadow-xs"
+                    key={cleanTxid || tx.id}
+                    onClick={() => onSelectTransaction(cleanTxid)}
+                    className="p-2.5 rounded-lg bg-[#141414] hover:bg-[#1f1f1f] border border-neutral-800 hover:border-neutral-600 transition-all cursor-pointer group shadow-xs"
                   >
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-1.5 truncate max-w-[170px]">
                         <span className="h-2 w-2 rounded-xs shrink-0" style={{ backgroundColor: txColors.border }} />
-                        <span className="font-mono text-[11px] text-white group-hover:text-amber-400 font-bold truncate">
-                          {tx.txid.slice(0, 10)}...{tx.txid.slice(-8)}
+                        <span className="font-mono text-[11px] text-white group-hover:text-neutral-300 font-bold truncate">
+                          {cleanTxid.slice(0, 10)}...{cleanTxid.slice(-8)}
                         </span>
                       </div>
-                      <ArrowUpRight size={13} className="text-slate-400 group-hover:text-amber-400 transition-colors" />
+                      <ArrowUpRight size={13} className="text-neutral-500 group-hover:text-white transition-colors" />
                     </div>
-                    <div className="flex items-center justify-between text-[10px] font-mono text-slate-300">
+                    <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400">
                       <span className="font-medium">Block {tx.block_height ?? '---'}</span>
-                      <span className="text-white font-bold">
-                        {tx.total_output_sats ? (tx.total_output_sats / 100_000_000).toFixed(4) : '0.0000'} BTC
-                      </span>
+                      <span className="text-white font-bold">{totalBtc} BTC</span>
                     </div>
-                    <div className="text-[10px] font-mono text-slate-400 mt-1 flex items-center justify-between">
+                    <div className="text-[10px] font-mono text-neutral-400 mt-1 flex items-center justify-between">
                       <span>
-                        <span className="text-slate-300 font-semibold">{tx.input_count ?? 1} in</span>
+                        <span className="text-neutral-300 font-semibold">{tx.input_count ?? 1} in</span>
                         <span className="mx-1">&rarr;</span>
-                        <span className="text-slate-300 font-semibold">{tx.output_count ?? 2} out</span>
+                        <span className="text-neutral-300 font-semibold">{tx.output_count ?? 2} out</span>
                       </span>
-                      <span className="text-emerald-400 font-medium">
-                        {tx.fee_rate ? `${tx.fee_rate} sat/vB` : ''}
+                      <span className="text-neutral-300 font-medium">
+                        {tx.fee_sats ? `${tx.fee_sats} sats` : ''}
                       </span>
                     </div>
                   </div>
@@ -398,116 +402,67 @@ export const LeftSidebar: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Tab 2: Forensic Heuristics */}
+      {/* Tab 2: Heuristics */}
       {activeTab === 'heuristics' && (
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="p-3 border-b border-slate-800 bg-[#0a0d13] flex items-center justify-between">
-            <span className="text-[11px] font-mono text-slate-300 uppercase font-semibold">12 FORENSIC RULES</span>
+          <div className="p-3 border-b border-neutral-800 bg-[#050505] flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] font-mono text-neutral-300 uppercase font-semibold">
+                12 ANALYSIS RULES
+              </span>
+              <InfoTooltip content="Individually enable or disable heuristics to refine graph inferences." />
+            </div>
             <button
+              type="button"
               onClick={onRunAnalysis}
               disabled={isAnalyzing}
-              className="px-3 py-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 rounded font-mono font-bold text-[10px] flex items-center gap-1 shadow-xs cursor-pointer"
+              className="px-3 py-1 bg-white hover:bg-neutral-200 disabled:opacity-50 text-black rounded font-mono font-bold text-[10px] flex items-center gap-1 shadow-xs cursor-pointer"
             >
               <Play size={10} />
-              <span>{isAnalyzing ? 'ANALYZING...' : 'RUN LIVE'}</span>
+              <span>{isAnalyzing ? 'ANALYZING...' : 'RUN'}</span>
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
             {heuristicsList.map((h) => {
               const isEnabled = enabledHeuristics[h.id] !== false;
               return (
                 <div
                   key={h.id}
                   onClick={() => onToggleHeuristic(h.id)}
-                  className={`p-2.5 rounded-lg border transition-all cursor-pointer ${
+                  className={`p-3 rounded-lg border transition-all cursor-pointer ${
                     isEnabled
-                      ? 'bg-[#14171f] border-slate-700/80 hover:border-slate-600 shadow-xs'
-                      : 'bg-slate-950/40 border-slate-900 opacity-50'
+                      ? 'bg-[#141414] border-neutral-800 hover:border-neutral-600 shadow-xs'
+                      : 'bg-black border-neutral-900 opacity-50'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-start justify-between gap-1 mb-1">
                     <div className="flex items-center gap-2 font-semibold text-white">
                       <input
                         type="checkbox"
                         checked={isEnabled}
                         onChange={() => {}}
-                        className="rounded bg-slate-800 border-slate-600 text-amber-500 focus:ring-0 cursor-pointer h-3.5 w-3.5"
+                        className="rounded bg-neutral-900 border-neutral-700 text-white focus:ring-0 cursor-pointer h-3.5 w-3.5 shrink-0"
                       />
-                      <span className="text-xs">{h.label}</span>
+                      <span className="text-xs leading-snug">{h.label}</span>
                     </div>
-                    <span
-                      className={`text-[9px] font-mono px-1.5 py-0.2 rounded uppercase font-bold ${
-                        h.severity === 'warning'
-                          ? 'bg-amber-950/60 text-amber-300 border border-amber-800/80'
-                          : 'bg-slate-800 text-slate-300 border border-slate-700'
-                      }`}
-                    >
-                      {h.severity}
+                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded uppercase font-bold bg-[#1f1f1f] text-neutral-300 border border-neutral-700 shrink-0">
+                      {h.tag}
                     </span>
                   </div>
-                  <p className="text-[10px] text-slate-400 pl-5.5 leading-relaxed">{h.desc}</p>
+
+                  <p className="text-[11px] text-neutral-300 pl-5.5 leading-relaxed font-sans mb-1.5">
+                    {h.desc}
+                  </p>
+
+                  <div className="pl-5.5 pt-1.5 border-t border-neutral-800/80 flex items-start gap-1 text-[10px] text-neutral-400">
+                    <span className="font-semibold text-neutral-300 shrink-0">Principle:</span>
+                    <span className="italic">{h.detail}</span>
+                  </div>
                 </div>
               );
             })}
           </div>
-        </div>
-      )}
-
-      {/* Tab 3: Forensic Dossier Export */}
-      {activeTab === 'dossier' && (
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          <div className="bg-[#14171f] border border-slate-700/80 rounded-lg p-3 space-y-2 shadow-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono text-amber-400 uppercase font-bold">ACTIVE SESSION</span>
-              {investigation?.id && (
-                <span className="text-[10px] font-mono text-slate-400 font-semibold">REF #{investigation.id}</span>
-              )}
-            </div>
-            <h3 className="font-bold text-sm text-white">
-              {investigation?.name || 'Local Forensic Investigation'}
-            </h3>
-            {selectedSubject && (
-              <div className="py-1 px-2 rounded bg-[#0d1016] border border-slate-700 text-[10px] font-mono text-amber-400 truncate">
-                Target: {selectedSubject}
-              </div>
-            )}
-            {investigation?.snapshot_height ? (
-              <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] font-mono text-slate-300">
-                <span>SNAPSHOT HEIGHT:</span>
-                <span className="text-white font-bold">#{investigation.snapshot_height.toLocaleString()}</span>
-              </div>
-            ) : null}
-          </div>
-
-          {/* Analyst Notes */}
-          <div>
-            <label className="text-[11px] font-mono text-slate-300 uppercase font-semibold mb-1.5 block">
-              Session Notes
-            </label>
-            <textarea
-              rows={4}
-              placeholder="Enter analyst observations, transaction cluster notes, or investigation context..."
-              value={analystNotes}
-              onChange={(e) => setAnalystNotes(e.target.value)}
-              className="w-full bg-[#14171f] border border-slate-700 rounded-md p-2.5 text-xs text-white font-sans focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/40 resize-none transition-colors"
-            />
-          </div>
-
-          {/* Export Report Button */}
-          {investigation?.id ? (
-            <button
-              onClick={handleOpenReport}
-              className="w-full py-2.5 bg-slate-100 hover:bg-white text-slate-950 font-bold rounded-md shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
-            >
-              <FileText size={14} />
-              <span>Generate Forensic Dossier</span>
-            </button>
-          ) : (
-            <div className="text-[11px] text-slate-400 font-mono text-center py-2.5 bg-[#14171f] rounded border border-slate-800">
-              Select or inspect a transaction to attach findings to a dossier.
-            </div>
-          )}
         </div>
       )}
     </aside>

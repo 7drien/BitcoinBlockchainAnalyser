@@ -110,11 +110,33 @@ class GraphBuilder:
                             "txid": tx.txid,
                             "amount_sats": out.value_sats,
                             "amount_btc": sats_to_btc(out.value_sats),
+                            "total_output_sats": tx.total_output_sats,
                             "fee_sats": tx.fee_sats,
+                            "fee_rate": tx.fee_rate,
+                            "vsize": tx.vsize,
                             "block_height": tx.block_height,
                             "block_time": tx.block_time,
                             "is_center": is_center_tx,
                             "label": f"{sats_to_btc(out.value_sats):.4f} BTC",
+                            "input_count": len(tx.inputs),
+                            "output_count": len(tx.outputs),
+                            "inputs": [
+                                {
+                                    "address": inp.address,
+                                    "value_sats": inp.value_sats,
+                                    "script_type": inp.script_type,
+                                }
+                                for inp in tx.inputs
+                            ],
+                            "outputs": [
+                                {
+                                    "address": o.address,
+                                    "value_sats": o.value_sats,
+                                    "script_type": o.script_type,
+                                    "index": o.index,
+                                }
+                                for o in tx.outputs
+                            ],
                         }
                     )
 
@@ -126,7 +148,57 @@ class GraphBuilder:
         return GraphData(
             nodes=[GraphElement(data=d) for d in nodes_dict.values()],
             edges=[GraphElement(data=d) for d in filtered_edges],
+            transactions=GraphBuilder._serialize_transactions(transactions, center_txid),
         )
+
+    @staticmethod
+    def _serialize_transactions(
+        transactions: list[NormalizedTransaction], center_txid: str | None = None
+    ) -> list[dict[str, Any]]:
+        result = []
+        for tx in transactions:
+            result.append(
+                {
+                    "id": tx.txid,
+                    "txid": tx.txid,
+                    "full_id": tx.txid,
+                    "type": "transaction",
+                    "block_height": tx.block_height,
+                    "block_hash": tx.block_hash,
+                    "block_time": tx.block_time,
+                    "vsize": tx.vsize,
+                    "fee_sats": tx.fee_sats,
+                    "fee_rate": tx.fee_rate,
+                    "total_input_sats": tx.total_input_sats,
+                    "total_output_sats": tx.total_output_sats,
+                    "amount_btc": sats_to_btc(tx.total_output_sats),
+                    "input_count": len(tx.inputs),
+                    "output_count": len(tx.outputs),
+                    "inputs": [
+                        {
+                            "address": inp.address,
+                            "value_sats": inp.value_sats,
+                            "script_type": inp.script_type,
+                            "txid": inp.txid,
+                            "vout": inp.vout,
+                            "is_coinbase": inp.is_coinbase,
+                        }
+                        for inp in tx.inputs
+                    ],
+                    "outputs": [
+                        {
+                            "address": out.address,
+                            "value_sats": out.value_sats,
+                            "script_type": out.script_type,
+                            "index": out.index,
+                            "spent": out.spent,
+                        }
+                        for out in tx.outputs
+                    ],
+                    "is_center": tx.txid == center_txid,
+                }
+            )
+        return result
 
     @staticmethod
     def build_utxo_graph(
@@ -150,6 +222,7 @@ class GraphBuilder:
                 "id": tx_node_id,
                 "label": f"TX {tx.txid[:6]}...{tx.txid[-4:]}",
                 "full_id": tx.txid,
+                "txid": tx.txid,
                 "type": "transaction",
                 "is_center": tx.txid == center_txid,
                 "fee_sats": tx.fee_sats,
@@ -159,6 +232,26 @@ class GraphBuilder:
                 "block_time": tx.block_time,
                 "total_input_sats": tx.total_input_sats,
                 "total_output_sats": tx.total_output_sats,
+                "amount_btc": sats_to_btc(tx.total_output_sats),
+                "input_count": len(tx.inputs),
+                "output_count": len(tx.outputs),
+                "inputs": [
+                    {
+                        "address": inp.address,
+                        "value_sats": inp.value_sats,
+                        "script_type": inp.script_type,
+                    }
+                    for inp in tx.inputs
+                ],
+                "outputs": [
+                    {
+                        "address": out.address,
+                        "value_sats": out.value_sats,
+                        "script_type": out.script_type,
+                        "index": out.index,
+                    }
+                    for out in tx.outputs
+                ],
             }
 
         # 2. Second pass: Create outputs (UTXOs created by these transactions)
@@ -190,6 +283,7 @@ class GraphBuilder:
                             "source": tx_node_id,
                             "target": utxo_id,
                             "type": "creates",
+                            "txid": tx.txid,
                             "amount_sats": out.value_sats,
                             "label": f"creates #{out.index}",
                         }
@@ -222,6 +316,7 @@ class GraphBuilder:
                                 "source": prev_utxo_id,
                                 "target": tx_node_id,
                                 "type": "spends",
+                                "txid": tx.txid,
                                 "amount_sats": inp.value_sats,
                                 "label": "spends",
                             }
@@ -242,6 +337,7 @@ class GraphBuilder:
                             "source": cb_id,
                             "target": tx_node_id,
                             "type": "mints",
+                            "txid": tx.txid,
                             "amount_sats": inp.value_sats,
                             "label": "mints",
                         }
@@ -257,4 +353,5 @@ class GraphBuilder:
         return GraphData(
             nodes=[GraphElement(data=d) for d in nodes_dict.values()],
             edges=[GraphElement(data=d) for d in filtered_edges_utxo],
+            transactions=GraphBuilder._serialize_transactions(transactions, center_txid),
         )

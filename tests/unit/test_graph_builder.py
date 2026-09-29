@@ -26,16 +26,26 @@ def test_build_address_graph():
     assert sender_node.data["is_center"] is True
     assert sender_node.data["type"] == "address"
 
+    # Check serialized transactions & enriched edges
+    assert len(graph.transactions) == 1
+    assert graph.transactions[0]["txid"] == "tx_test_graph"
+    assert graph.transactions[0]["input_count"] == 2
+    assert graph.transactions[0]["output_count"] == 2
+    assert graph.edges[0].data["total_output_sats"] == 99_990_000
+    assert graph.edges[0].data["input_count"] == 2
+    assert graph.edges[0].data["output_count"] == 2
+
 
 def test_build_utxo_graph():
     tx = NormalizedTransaction(
         txid="tx_utxo_test",
-        inputs=[TransactionInput(txid="prev_tx", vout=0, value_sats=100_000_000)],
+        inputs=[TransactionInput(txid="prev_tx", vout=0, value_sats=100_000_000, address="bc1qsender")],
         outputs=[
             TransactionOutput(index=0, address="bc1qdest", value_sats=90_000_000),
             TransactionOutput(index=1, address="bc1qchg", value_sats=9_990_000),
         ],
         fee_sats=10_000,
+        total_output_sats=99_990_000,
     )
 
     graph = GraphBuilder.build_utxo_graph([tx], center_txid="tx_utxo_test")
@@ -43,5 +53,12 @@ def test_build_utxo_graph():
     assert len(graph.nodes) == 4
     tx_node = next(n for n in graph.nodes if n.data["type"] == "transaction")
     assert tx_node.data["is_center"] is True
+    assert tx_node.data["input_count"] == 1
+    assert tx_node.data["output_count"] == 2
+    assert len(tx_node.data["inputs"]) == 1
+    assert len(tx_node.data["outputs"]) == 2
     # 1 spends edge + 2 creates edges = 3 edges
     assert len(graph.edges) == 3
+    assert all(e.data.get("txid") == "tx_utxo_test" for e in graph.edges)
+    assert len(graph.transactions) == 1
+    assert graph.transactions[0]["txid"] == "tx_utxo_test"

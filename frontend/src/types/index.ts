@@ -24,19 +24,32 @@ export interface HeuristicFinding {
 export interface GraphNodeData {
   id: string;
   label: string;
-  type: 'address' | 'transaction' | 'utxo' | 'cluster';
+  type: 'address' | 'transaction' | 'utxo' | 'cluster' | 'coinbase';
   full_id?: string;
   full_address?: string;
   script_type?: string;
+  address_type?: string;
   balance_sats?: number;
+  current_balance_sats?: number;
+  total_received_sats?: number;
+  total_spent_sats?: number;
+  transaction_count?: number;
+  total_output_sats?: number;
   value_sats?: number;
   value_btc?: number;
+  amount_btc?: number;
   fee_sats?: number;
   fee_rate?: number;
   vsize?: number;
+  input_count?: number;
+  output_count?: number;
+  inputs?: any[];
+  outputs?: any[];
+  spent?: boolean;
   block_height?: number;
   block_time?: number;
   is_center?: boolean;
+  [key: string]: any;
 }
 
 export interface GraphEdgeData {
@@ -50,15 +63,22 @@ export interface GraphEdgeData {
   txid?: string;
   fee_sats?: number;
   block_height?: number;
+  is_center?: boolean;
+  [key: string]: any;
 }
 
-export interface GraphElement {
-  data: GraphNodeData | GraphEdgeData;
+export interface GraphNode {
+  data: GraphNodeData;
+}
+
+export interface GraphEdge {
+  data: GraphEdgeData;
 }
 
 export interface GraphData {
-  nodes: GraphElement[];
-  edges: GraphElement[];
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  transactions?: any[];
 }
 
 export interface Investigation {

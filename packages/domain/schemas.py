@@ -77,6 +77,7 @@ class GraphElement(BaseModel):
 class GraphData(BaseModel):
     nodes: list[GraphElement] = Field(default_factory=list)
     edges: list[GraphElement] = Field(default_factory=list)
+    transactions: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class Investigation(BaseModel):
