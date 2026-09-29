@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chainscope}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chainscope}
+      POSTGRES_DB: ${POSTGRES_DB:-chainscope}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chainscope} -d ${POSTGRES_DB:-chainscope}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  bitcoind:
+    image: lncm/bitcoind:v25.0
+    command:
+      - -printtoconsole
+      - -server
+      - -rpcbind=0.0.0.0
+      - -rpcallowip=0.0.0.0/0
+      - -txindex=1
+      - -rpcuser=${BITCOIN_RPC_USER:-btcuser}
+      - -rpcpassword=${BITCOIN_RPC_PASSWORD:-btcpass}
+      - -regtest=${BITCOIN_REGTEST:-1}
+      - -fallbackfee=0.00001
+    ports:
+      - "8332:8332"
+      - "18332:18332"
+      - "18443:18443"
+    volumes:
+      - bitcoin_data:/home/bitcoin/.bitcoin
+
+volumes:
+  postgres_data:
+  redis_data:
+  bitcoin_data:

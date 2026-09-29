@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.idea/
+.vscode/
+
+# Node
+node_modules/
+dist/
+build/
+
+# Postgres/Redis/Bitcoin data
+volumes/
+
+# MacOS
+.DS_Store

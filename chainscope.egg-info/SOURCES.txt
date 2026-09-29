@@ -1,0 +1,8 @@
+README.md
+pyproject.toml
+apps/api/main.py
+chainscope.egg-info/PKG-INFO
+chainscope.egg-info/SOURCES.txt
+chainscope.egg-info/dependency_links.txt
+chainscope.egg-info/requires.txt
+chainscope.egg-info/top_level.txt
