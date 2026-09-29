@@ -157,13 +157,9 @@ class SearchEngine:
 
         if address:
             addr_clean = address.strip()
-            addr_subq = (
-                select(Transaction.id)
-                .outerjoin(Input, Input.transaction_id == Transaction.id)
-                .outerjoin(Output, Output.transaction_id == Transaction.id)
-                .where(or_(Input.previous_address == addr_clean, Output.address == addr_clean))
-            )
-            conditions.append(Transaction.id.in_(addr_subq))
+            in_tx_subq = select(Input.transaction_id).where(Input.previous_address == addr_clean)
+            out_tx_subq = select(Output.transaction_id).where(Output.address == addr_clean)
+            conditions.append(or_(Transaction.id.in_(in_tx_subq), Transaction.id.in_(out_tx_subq)))
 
         if min_amount_sats is not None:
             conditions.append(Transaction.total_output_sats >= min_amount_sats)
@@ -195,28 +191,37 @@ class SearchEngine:
             conditions.append(Transaction.input_count >= 3)
             conditions.append(Transaction.output_count >= 3)
 
-
         stmt = (
-            select(Transaction)
+            select(
+                Transaction.txid,
+                Transaction.block_height,
+                Transaction.block_time,
+                Transaction.vsize,
+                Transaction.fee_sats,
+                Transaction.fee_rate,
+                Transaction.input_count,
+                Transaction.output_count,
+                Transaction.total_output_sats,
+            )
             .where(*conditions)
             .order_by(Transaction.block_height.desc())
             .limit(limit)
             .offset(offset)
         )
         result = await session.execute(stmt)
-        txs = result.scalars().all()
+        rows = result.all()
 
         return [
             {
-                "txid": tx.txid,
-                "block_height": tx.block_height,
-                "block_time": tx.block_time,
-                "vsize": tx.vsize,
-                "fee_sats": tx.fee_sats,
-                "fee_rate": tx.fee_rate,
-                "input_count": tx.input_count,
-                "output_count": tx.output_count,
-                "total_output_sats": tx.total_output_sats,
+                "txid": r.txid,
+                "block_height": r.block_height,
+                "block_time": r.block_time,
+                "vsize": r.vsize,
+                "fee_sats": r.fee_sats,
+                "fee_rate": r.fee_rate,
+                "input_count": r.input_count,
+                "output_count": r.output_count,
+                "total_output_sats": r.total_output_sats,
             }
-            for tx in txs
+            for r in rows
         ]

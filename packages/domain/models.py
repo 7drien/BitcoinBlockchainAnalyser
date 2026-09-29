@@ -43,7 +43,7 @@ class Transaction(Base):
     input_count: Mapped[int] = mapped_column(index=True)
     output_count: Mapped[int] = mapped_column(index=True)
     total_input_sats: Mapped[int] = mapped_column(BigInteger)
-    total_output_sats: Mapped[int] = mapped_column(BigInteger)
+    total_output_sats: Mapped[int] = mapped_column(BigInteger, index=True)
     fee_sats: Mapped[int] = mapped_column(BigInteger, index=True)
     fee_rate: Mapped[float] = mapped_column(Float, index=True)
     raw_transaction_hash: Mapped[str] = mapped_column(String(64))

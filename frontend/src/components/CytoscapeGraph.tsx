@@ -13,6 +13,70 @@ interface Props {
   selectedId?: string | null;
 }
 
+const getLayoutOptions = (layoutType: LayoutType) => {
+  switch (layoutType) {
+    case 'cose':
+      return {
+        name: 'cose',
+        animate: false,
+        padding: 80,
+        nodeDimensionsIncludeLabels: true,
+        // High repulsion to prevent nodes from bunching up closely
+        nodeRepulsion: () => 90000,
+        // Long ideal edge length for clean, spacious separation
+        idealEdgeLength: () => 180,
+        edgeElasticity: () => 25,
+        nodeOverlap: 50,
+        gravity: 0.04, // Very light gravity so nodes do not collapse into a ball
+        numIter: 1000,
+        initialTemp: 300,
+        coolingFactor: 0.95,
+        minTemp: 1.0,
+        randomize: false,
+        componentSpacing: 160,
+      };
+    case 'breadthfirst':
+      return {
+        name: 'breadthfirst',
+        directed: true,
+        padding: 80,
+        spacingFactor: 2.2,
+        animate: false,
+        avoidOverlap: true,
+        nodeDimensionsIncludeLabels: true,
+      };
+    case 'concentric':
+      return {
+        name: 'concentric',
+        padding: 80,
+        spacingFactor: 2.0,
+        minNodeSpacing: 80,
+        avoidOverlap: true,
+        nodeDimensionsIncludeLabels: true,
+        concentric: (node: any) => (node.data('is_center') ? 10 : (node.data('type') === 'transaction' ? 5 : 1)),
+        levelWidth: () => 2,
+      };
+    case 'circle':
+      return {
+        name: 'circle',
+        padding: 80,
+        spacingFactor: 2.0,
+        avoidOverlap: true,
+        nodeDimensionsIncludeLabels: true,
+      };
+    default:
+      return {
+        name: 'breadthfirst',
+        directed: true,
+        padding: 80,
+        spacingFactor: 2.0,
+        animate: false,
+        avoidOverlap: true,
+        nodeDimensionsIncludeLabels: true,
+      };
+  }
+};
+
 export const CytoscapeGraph: React.FC<Props> = ({
   data,
   layout,
@@ -60,10 +124,13 @@ export const CytoscapeGraph: React.FC<Props> = ({
               'label': 'data(label)',
               'font-family': 'monospace',
               'font-size': '11px',
+              'font-weight': 600,
               'text-valign': 'center',
               'text-halign': 'center',
               'width': 50,
               'height': 50,
+              'text-wrap': 'ellipsis',
+              'text-max-width': '75px',
               'transition-property': 'background-color, border-color, width, height',
               'transition-duration': 0.2,
             },
@@ -75,8 +142,8 @@ export const CytoscapeGraph: React.FC<Props> = ({
               'shape': 'ellipse',
               'border-color': '#06b6d4',
               'background-color': '#082f49',
-              'width': 44,
-              'height': 44,
+              'width': 50,
+              'height': 50,
             },
           },
           // Transaction nodes
@@ -86,8 +153,8 @@ export const CytoscapeGraph: React.FC<Props> = ({
               'shape': 'round-rectangle',
               'border-color': '#8b5cf6',
               'background-color': '#2e1065',
-              'width': 70,
-              'height': 36,
+              'width': 84,
+              'height': 38,
             },
           },
           // UTXO nodes
@@ -97,8 +164,8 @@ export const CytoscapeGraph: React.FC<Props> = ({
               'shape': 'diamond',
               'border-color': '#10b981',
               'background-color': '#064e3b',
-              'width': 40,
-              'height': 40,
+              'width': 44,
+              'height': 44,
             },
           },
           // Coinbase nodes
@@ -108,17 +175,20 @@ export const CytoscapeGraph: React.FC<Props> = ({
               'shape': 'hexagon',
               'border-color': '#f59e0b',
               'background-color': '#78350f',
-              'width': 46,
-              'height': 46,
+              'width': 50,
+              'height': 50,
             },
           },
-          // Center / focused node
+          // Center / focused node (Glowing cyan halo)
           {
             selector: 'node[?is_center]',
             style: {
               'border-width': 4,
-              'border-color': '#06b6d4',
+              'border-color': '#00f0ff',
               'border-style': 'solid',
+              'underlay-color': '#00f0ff',
+              'underlay-padding': 6,
+              'underlay-opacity': 0.3,
             },
           },
           // Selected node
@@ -139,33 +209,39 @@ export const CytoscapeGraph: React.FC<Props> = ({
               'target-arrow-color': '#475569',
               'target-arrow-shape': 'triangle',
               'curve-style': 'bezier',
-              'arrow-scale': 1.2,
+              'control-point-step-size': 40,
+              'arrow-scale': 1.25,
               'label': 'data(label)',
               'font-family': 'monospace',
               'font-size': '10px',
-              'color': '#94a3b8',
-              'text-background-color': '#090d16',
-              'text-background-opacity': 0.8,
-              'text-background-padding': '2px',
+              'font-weight': 500,
+              'color': '#cbd5e1',
+              'text-background-color': '#070b14',
+              'text-background-opacity': 0.9,
+              'text-background-padding': '3px',
+              'text-background-shape': 'roundrectangle',
               'text-rotation': 'autorotate',
+            },
+          },
+          {
+            selector: 'edge[?is_center]',
+            style: {
+              'width': 2.5,
+              'line-color': '#0284c7',
+              'target-arrow-color': '#0284c7',
             },
           },
           {
             selector: 'edge:selected',
             style: {
-              'width': 3,
+              'width': 3.5,
               'line-color': '#38bdf8',
               'target-arrow-color': '#38bdf8',
               'color': '#38bdf8',
             },
           },
         ],
-        layout: {
-          name: layout === 'breadthfirst' ? 'breadthfirst' : layout,
-          directed: true,
-          padding: 50,
-          spacingFactor: 1.4,
-        } as any,
+        layout: getLayoutOptions(layout) as any,
       });
 
       cy.on('tap', 'node', (evt: EventObject) => {
@@ -228,81 +304,101 @@ export const CytoscapeGraph: React.FC<Props> = ({
         }
       }
     } catch (err) {
-      console.warn('Error selecting element in Cytoscape:', err);
+      console.error('Error selecting node/edge:', err);
     }
   }, [selectedId]);
 
+  // Canvas Action Helpers
+  const handleZoomIn = () => {
+    cyRef.current?.zoom(cyRef.current.zoom() * 1.25);
+  };
 
-  const handleZoomIn = () => cyRef.current?.zoom(cyRef.current.zoom() * 1.25);
-  const handleZoomOut = () => cyRef.current?.zoom(cyRef.current.zoom() * 0.8);
-  const handleFit = () => cyRef.current?.fit(undefined, 40);
-  const handleReset = () => {
+  const handleZoomOut = () => {
+    cyRef.current?.zoom(cyRef.current.zoom() / 1.25);
+  };
+
+  const handleFit = () => {
+    cyRef.current?.fit(undefined, 80);
+  };
+
+  const handleResetLayout = () => {
     if (!cyRef.current) return;
-    cyRef.current.reset();
-    cyRef.current.layout({ name: layout, directed: true, padding: 50 } as any).run();
+    const l = cyRef.current.layout(getLayoutOptions(layout) as any);
+    l.run();
   };
 
   const handleExportPNG = () => {
     if (!cyRef.current) return;
-    const png = cyRef.current.png({ full: true, bg: '#090d16', scale: 2 });
-    const link = document.createElement('a');
-    link.download = `chainscope-graph-${Date.now()}.png`;
-    link.href = png;
-    link.click();
+    const png = cyRef.current.png({ full: true, bg: '#070b14', scale: 2 });
+    const a = document.createElement('a');
+    a.href = png;
+    a.download = `chainscope-flow-${Date.now()}.png`;
+    a.click();
   };
 
   return (
-    <div className="relative w-full h-full bg-[#070b14] overflow-hidden select-none">
+    <div className="w-full h-full relative overflow-hidden bg-[#070b14]">
       {/* Cytoscape Canvas Container */}
-      <div ref={containerRef} className="w-full h-full" />
+      <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
-      {/* Floating Canvas Controls */}
-      <div className="absolute top-4 right-4 flex flex-col gap-1.5 bg-[#0f172a]/90 backdrop-blur border border-slate-800 rounded-lg p-1.5 shadow-xl z-10">
+      {/* Floating Canvas Controls Overlay */}
+      <div className="absolute top-4 right-4 flex flex-col gap-1.5 z-10 bg-slate-900/90 backdrop-blur-xs p-1.5 rounded-lg border border-slate-800 shadow-xl">
         <button
           onClick={handleZoomIn}
-          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800/80 rounded transition-colors"
-          title="Zoom In"
+          className="p-2 text-slate-300 hover:text-white hover:bg-slate-850 rounded transition-colors"
+          title="Zoom in"
         >
           <ZoomIn size={16} />
         </button>
         <button
           onClick={handleZoomOut}
-          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800/80 rounded transition-colors"
-          title="Zoom Out"
+          className="p-2 text-slate-300 hover:text-white hover:bg-slate-850 rounded transition-colors"
+          title="Zoom out"
         >
           <ZoomOut size={16} />
         </button>
         <button
           onClick={handleFit}
-          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800/80 rounded transition-colors"
-          title="Fit View"
+          className="p-2 text-slate-300 hover:text-white hover:bg-slate-850 rounded transition-colors"
+          title="Fit view to canvas"
         >
           <Maximize2 size={16} />
         </button>
         <button
-          onClick={handleReset}
-          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800/80 rounded transition-colors"
-          title="Re-layout Graph"
+          onClick={handleResetLayout}
+          className="p-2 text-slate-300 hover:text-white hover:bg-slate-850 rounded transition-colors"
+          title="Re-run layout calculation"
         >
           <RotateCcw size={16} />
         </button>
-        <div className="h-px bg-slate-800 my-0.5" />
+        <div className="h-px bg-slate-800 my-1" />
         <button
           onClick={handleExportPNG}
-          className="p-2 text-cyan-400 hover:text-cyan-300 hover:bg-slate-800/80 rounded transition-colors"
-          title="Export Graph Image (PNG)"
+          className="p-2 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-950/60 rounded transition-colors"
+          title="Export high-res PNG"
         >
           <Download size={16} />
         </button>
       </div>
 
-      {/* Canvas Watermark Telemetry */}
-      <div className="absolute bottom-4 left-4 flex items-center gap-3 text-[11px] text-slate-500 font-mono bg-[#090d16]/80 px-2.5 py-1 rounded border border-slate-800/60 pointer-events-none">
-        <span>NODES: {data.nodes.length}</span>
-        <span>•</span>
-        <span>EDGES: {data.edges.length}</span>
-        <span>•</span>
-        <span className="uppercase">LAYOUT: {layout}</span>
+      {/* Mini Legend Overlay */}
+      <div className="absolute bottom-4 left-4 z-10 bg-slate-950/85 backdrop-blur-xs px-3 py-2 rounded-lg border border-slate-800 text-[10px] font-mono flex items-center gap-3 text-slate-400 pointer-events-none shadow-md">
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-cyan-500 border border-cyan-400" />
+          <span>Address</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-4 rounded-xs bg-purple-600 border border-purple-400" />
+          <span>Transaction</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rotate-45 bg-emerald-600 border border-emerald-400" />
+          <span>UTXO</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full border-2 border-cyan-300" />
+          <span>Center Focus</span>
+        </div>
       </div>
     </div>
   );
