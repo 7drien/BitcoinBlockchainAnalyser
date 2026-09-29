@@ -69,6 +69,15 @@ class LiveSyncService:
         if not self.provider.enabled:
             return None, []
 
+        # Check if address was already indexed and is fresh (within 5 minutes)
+        addr_stmt = select(Address).where(Address.address == address)
+        addr_res = await session.execute(addr_stmt)
+        addr_model = addr_res.scalars().first()
+        if addr_model and addr_model.last_seen_at:
+            age = (datetime.now(UTC) - addr_model.last_seen_at).total_seconds()
+            if age < 300:
+                return addr_model, []
+
         try:
             logger.info("fetching_live_address", address=address)
             addr_info = await self.provider.get_address(address)
@@ -79,7 +88,7 @@ class LiveSyncService:
 
         # 1. Index each transaction returned for the address
         synced_txs: list[NormalizedTransaction] = []
-        for raw_tx in raw_txs[:25]:  # Index top 25 recent transactions
+        for raw_tx in raw_txs[:50]:  # Index top 50 recent on-chain transactions
             try:
                 norm_tx = TransactionParser.parse_mempool_transaction(raw_tx)
                 await self._persist_transaction(session, norm_tx)

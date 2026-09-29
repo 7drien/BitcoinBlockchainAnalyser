@@ -4,7 +4,7 @@ import { LeftSidebar } from './components/LeftSidebar';
 import { CytoscapeGraph } from './components/CytoscapeGraph';
 import { InspectorPanel } from './components/InspectorPanel';
 import { BottomDock } from './components/BottomDock';
-import type { NodeStatus, GraphMode, LayoutType, GraphData, HeuristicFinding, Investigation } from './types';
+import type { NodeStatus, GraphMode, LayoutType, ColorMode, GraphData, HeuristicFinding, Investigation } from './types';
 
 // API base helper (relative path uses Vite proxy, fallback to port 8000)
 const API_BASE = '/api';
@@ -12,19 +12,20 @@ const API_BASE = '/api';
 export function App() {
   // Global & Connectivity State
   const [status, setStatus] = useState<NodeStatus | null>(null);
-  const [logs, setLogs] = useState<string[]>([]);
-  const [dockOpen, setDockOpen] = useState(true);
+  const [dockOpen, setDockOpen] = useState(false);
 
   // Search & Navigation State
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
 
-  // Graph State
+  // Graph State & Customization
   const [mode, setMode] = useState<GraphMode>('address');
-  const [layout, setLayout] = useState<LayoutType>('breadthfirst');
+  const [layout, setLayout] = useState<LayoutType>('cose');
   const [depth, setDepth] = useState<number>(2);
   const [direction, setDirection] = useState<'both' | 'upstream' | 'downstream'>('both');
+  const [fontSize, setFontSize] = useState<number>(12);
+  const [colorMode, setColorMode] = useState<ColorMode>('hash');
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], edges: [] });
   const [selectedNode, setSelectedNode] = useState<any | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<any | null>(null);
@@ -36,6 +37,7 @@ export function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [enabledHeuristics, setEnabledHeuristics] = useState<Record<string, boolean>>({});
   const [filterResults, setFilterResults] = useState<any[]>([]);
+  const [isFiltering, setIsFiltering] = useState(false);
 
   // Fetch Node Status
   const fetchStatus = useCallback(async () => {
@@ -114,7 +116,7 @@ export function App() {
     }
   }, []);
 
-  // Connect WebSocket Logs
+  // Initial Load & Status Polling
   useEffect(() => {
     fetchStatus();
     fetchGraph();
@@ -123,31 +125,52 @@ export function App() {
     // Poll status every 10s
     const statusInterval = setInterval(fetchStatus, 10000);
 
-    // Setup live WebSocket telemetry
-    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = window.location.port === '5173' ? 'localhost:8000' : window.location.host;
-    const ws = new WebSocket(`${wsProto}//${wsHost}/api/logs/stream`);
-
-    ws.onmessage = (event) => {
-      setLogs((prev) => [...prev, event.data].slice(-100));
-    };
-
     return () => {
       clearInterval(statusInterval);
-      ws.close();
     };
   }, [fetchStatus, fetchGraph, fetchInvestigation]);
 
-  // Handle Search Submission
+  // Run Forensic Analysis
+  const runForensics = async (txid: string) => {
+    setIsAnalyzing(true);
+    try {
+      const activeList = Object.entries(enabledHeuristics)
+        .filter(([_, v]) => v)
+        .map(([k]) => k);
+
+      const res = await fetch(`${API_BASE}/forensics/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          txid: txid,
+          enabled_heuristics: activeList.length > 0 ? activeList : undefined,
+        }),
+      });
+
+      if (res.ok) {
+        const findings = await res.json();
+        setHeuristicFindings(findings);
+      }
+    } catch (err) {
+      console.error('Forensics analysis failed:', err);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // Handle Search Submission (guaranteed Enter key support)
   const handleSearch = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!searchQuery.trim()) return;
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+    const query = searchQuery.trim();
+    if (!query) return;
 
     setIsSearching(true);
     setSearchError('');
 
     try {
-      const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`);
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.detail || 'Search query yielded no results.');
@@ -185,39 +208,9 @@ export function App() {
     }
   };
 
-  // Run Forensic Analysis
-  const runForensics = async (txid: string) => {
-    setIsAnalyzing(true);
-    try {
-      const activeList = Object.entries(enabledHeuristics)
-        .filter(([_, v]) => v)
-        .map(([k]) => k);
-
-      const res = await fetch(`${API_BASE}/forensics/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          txid: txid,
-          enabled_heuristics: activeList.length > 0 ? activeList : undefined,
-        }),
-      });
-
-      if (res.ok) {
-        const findings = await res.json();
-        setHeuristicFindings(findings);
-      }
-    } catch (err) {
-      console.error('Forensics analysis failed:', err);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-
-
-
   // Filter Submissions
   const handleApplyFilter = async (filters: any) => {
+    setIsFiltering(true);
     try {
       const res = await fetch(`${API_BASE}/search/filter`, {
         method: 'POST',
@@ -231,7 +224,7 @@ export function App() {
         setDockOpen(true);
         if (results.length > 0) {
           const firstTx = results[0];
-          fetchGraph(firstTx.txid);
+          fetchGraph(firstTx.txid, mode, 1, 'both');
           setSelectedNode({
             id: firstTx.txid,
             type: 'transaction',
@@ -243,6 +236,8 @@ export function App() {
       }
     } catch (err) {
       console.error('Filter request failed:', err);
+    } finally {
+      setIsFiltering(false);
     }
   };
 
@@ -314,8 +309,10 @@ export function App() {
         onDepthChange={handleDepthChange}
         direction={direction}
         onDirectionChange={handleDirectionChange}
-        showLogs={dockOpen}
-        onToggleLogs={() => setDockOpen(!dockOpen)}
+        fontSize={fontSize}
+        onFontSizeChange={setFontSize}
+        colorMode={colorMode}
+        onColorModeChange={setColorMode}
         isSearching={isSearching}
       />
 
@@ -328,6 +325,7 @@ export function App() {
           onToggleHeuristic={handleToggleHeuristic}
           onRunAnalysis={() => selectedNode && runForensics(selectedNode.full_id || selectedNode.id)}
           isAnalyzing={isAnalyzing}
+          isFiltering={isFiltering}
           onApplyFilter={handleApplyFilter}
           onSelectTransaction={(txid) => {
             fetchGraph(txid, mode, depth, direction);
@@ -339,11 +337,14 @@ export function App() {
         />
 
         {/* Center Cytoscape Canvas & Controls */}
-        <main className="flex-1 flex flex-col relative bg-[#070b14] overflow-hidden">
+        <main className="flex-1 flex flex-col relative bg-[#0c0e12] overflow-hidden">
           {searchError && (
-            <div className="bg-red-950/80 border-b border-red-800 text-red-300 px-4 py-2 text-xs font-mono flex items-center justify-between">
-              <span>SEARCH ERROR: {searchError}</span>
-              <button onClick={() => setSearchError('')} className="text-red-400 hover:text-white">
+            <div className="bg-rose-950/90 border-b border-rose-800 text-rose-200 px-4 py-2 text-xs font-mono flex items-center justify-between shadow-sm">
+              <span className="font-semibold">SEARCH ERROR: {searchError}</span>
+              <button
+                onClick={() => setSearchError('')}
+                className="text-rose-300 hover:text-white font-bold px-1.5 py-0.5 rounded cursor-pointer"
+              >
                 ✕
               </button>
             </div>
@@ -351,10 +352,10 @@ export function App() {
 
           <div className="flex-1 relative">
             {isLoadingGraph && (
-              <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-10">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400" />
-                  <span className="text-xs font-mono text-cyan-400">Rendering Topological Flow...</span>
+              <div className="absolute inset-0 bg-[#0c0e12]/75 backdrop-blur-xs flex items-center justify-center z-10">
+                <div className="flex flex-col items-center gap-2.5 p-4 rounded-lg bg-[#14171f] border border-slate-700 shadow-xl">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400" />
+                  <span className="text-xs font-mono font-bold text-slate-200">Rendering Topological Flow...</span>
                 </div>
               </div>
             )}
@@ -362,6 +363,10 @@ export function App() {
             <CytoscapeGraph
               data={graphData}
               layout={layout}
+              fontSize={fontSize}
+              onFontSizeChange={setFontSize}
+              colorMode={colorMode}
+              onColorModeChange={setColorMode}
               onSelectNode={(node) => {
                 setSelectedNode(node);
                 setSelectedEdge(null);
@@ -394,13 +399,10 @@ export function App() {
               onDoubleTapNode={handleExploreNode}
               selectedId={selectedNode?.id}
             />
-
           </div>
 
-          {/* Bottom Dock (Timeline, Query Table, Terminal) */}
+          {/* Bottom Dock (Query & Filter Results Table) */}
           <BottomDock
-            logs={logs}
-            onClearLogs={() => setLogs([])}
             filterResults={filterResults}
             onSelectTx={(txid) => {
               fetchGraph(txid, mode, depth, direction);

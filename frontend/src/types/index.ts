@@ -1,5 +1,6 @@
 export type GraphMode = 'address' | 'utxo';
 export type LayoutType = 'breadthfirst' | 'cose' | 'concentric' | 'circle';
+export type ColorMode = 'hash' | 'type';
 
 export interface NodeStatus {
   network: string;

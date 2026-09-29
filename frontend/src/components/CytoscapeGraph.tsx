@@ -1,46 +1,52 @@
 import React, { useEffect, useRef } from 'react';
 import cytoscape from 'cytoscape';
 import type { Core, EventObject } from 'cytoscape';
-import type { GraphData, LayoutType } from '../types';
-import { ZoomIn, ZoomOut, Maximize2, RotateCcw, Download } from 'lucide-react';
+import type { GraphData, LayoutType, ColorMode } from '../types';
+import { ZoomIn, ZoomOut, Maximize2, RotateCcw, Download, Palette, Type } from 'lucide-react';
+import { getNodeColors } from '../lib/colors';
 
 interface Props {
   data: GraphData;
   layout: LayoutType;
+  fontSize?: number;
+  onFontSizeChange?: (size: number) => void;
+  colorMode?: ColorMode;
+  onColorModeChange?: (mode: ColorMode) => void;
   onSelectNode: (nodeData: any) => void;
   onSelectEdge: (edgeData: any) => void;
   onDoubleTapNode?: (id: string) => void;
   selectedId?: string | null;
 }
 
-const getLayoutOptions = (layoutType: LayoutType) => {
+const getLayoutOptions = (layoutType: LayoutType, fontSize: number = 12) => {
+  const fontMultiplier = Math.max(0.8, fontSize / 12);
   switch (layoutType) {
     case 'cose':
       return {
         name: 'cose',
         animate: false,
-        padding: 80,
+        padding: Math.round(70 * fontMultiplier),
         nodeDimensionsIncludeLabels: true,
-        // High repulsion to prevent nodes from bunching up closely
-        nodeRepulsion: () => 90000,
-        // Long ideal edge length for clean, spacious separation
-        idealEdgeLength: () => 180,
-        edgeElasticity: () => 25,
-        nodeOverlap: 50,
-        gravity: 0.04, // Very light gravity so nodes do not collapse into a ball
-        numIter: 1000,
-        initialTemp: 300,
+        // High repulsion to prevent nodes from overlapping
+        nodeRepulsion: () => Math.round(95000 * fontMultiplier),
+        // Ideal length for natural transaction-address clusters
+        idealEdgeLength: () => Math.round(150 * fontMultiplier),
+        edgeElasticity: () => 32,
+        nestingFactor: 1.2,
+        gravity: 0.08, // Forms natural, cohesive clusters for related transactions
+        numIter: 1200,
+        initialTemp: 350,
         coolingFactor: 0.95,
         minTemp: 1.0,
         randomize: false,
-        componentSpacing: 160,
+        componentSpacing: Math.round(180 * fontMultiplier),
       };
     case 'breadthfirst':
       return {
         name: 'breadthfirst',
         directed: true,
-        padding: 80,
-        spacingFactor: 2.2,
+        padding: Math.round(70 * fontMultiplier),
+        spacingFactor: 2.2 + (fontSize - 11) * 0.08,
         animate: false,
         avoidOverlap: true,
         nodeDimensionsIncludeLabels: true,
@@ -48,9 +54,9 @@ const getLayoutOptions = (layoutType: LayoutType) => {
     case 'concentric':
       return {
         name: 'concentric',
-        padding: 80,
-        spacingFactor: 2.0,
-        minNodeSpacing: 80,
+        padding: Math.round(70 * fontMultiplier),
+        spacingFactor: 2.0 * fontMultiplier,
+        minNodeSpacing: Math.round(75 * fontMultiplier),
         avoidOverlap: true,
         nodeDimensionsIncludeLabels: true,
         concentric: (node: any) => (node.data('is_center') ? 10 : (node.data('type') === 'transaction' ? 5 : 1)),
@@ -59,27 +65,33 @@ const getLayoutOptions = (layoutType: LayoutType) => {
     case 'circle':
       return {
         name: 'circle',
-        padding: 80,
-        spacingFactor: 2.0,
+        padding: Math.round(70 * fontMultiplier),
+        spacingFactor: 2.0 * fontMultiplier,
         avoidOverlap: true,
         nodeDimensionsIncludeLabels: true,
       };
     default:
       return {
-        name: 'breadthfirst',
-        directed: true,
-        padding: 80,
-        spacingFactor: 2.0,
+        name: 'cose',
         animate: false,
-        avoidOverlap: true,
+        padding: Math.round(70 * fontMultiplier),
         nodeDimensionsIncludeLabels: true,
+        nodeRepulsion: () => Math.round(95000 * fontMultiplier),
+        idealEdgeLength: () => Math.round(150 * fontMultiplier),
+        edgeElasticity: () => 32,
+        gravity: 0.08,
+        componentSpacing: Math.round(180 * fontMultiplier),
       };
   }
 };
 
 export const CytoscapeGraph: React.FC<Props> = ({
   data,
-  layout,
+  layout = 'cose',
+  fontSize = 12,
+  onFontSizeChange,
+  colorMode = 'hash',
+  onColorModeChange,
   onSelectNode,
   onSelectEdge,
   onDoubleTapNode,
@@ -99,10 +111,18 @@ export const CytoscapeGraph: React.FC<Props> = ({
     });
 
     const elements = [
-      ...(data?.nodes || []).map((n) => ({
-        group: 'nodes' as const,
-        data: n.data,
-      })),
+      ...(data?.nodes || []).map((n) => {
+        const colors = getNodeColors(n.data, colorMode);
+        return {
+          group: 'nodes' as const,
+          data: {
+            ...n.data,
+            nodeBg: colors.bg,
+            nodeBorder: colors.border,
+            nodeOutline: colors.outline,
+          },
+        };
+      }),
       ...validEdges.map((e) => ({
         group: 'edges' as const,
         data: e.data,
@@ -117,22 +137,22 @@ export const CytoscapeGraph: React.FC<Props> = ({
           {
             selector: 'node',
             style: {
-              'background-color': '#1e293b',
-              'border-width': 2,
-              'border-color': '#334155',
-              'color': '#f8fafc',
+              'background-color': 'data(nodeBg)',
+              'border-width': 2.5,
+              'border-color': 'data(nodeBorder)',
+              'color': '#f9fafb',
               'label': 'data(label)',
-              'font-family': 'monospace',
-              'font-size': '11px',
-              'font-weight': 600,
+              'font-family': 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+              'font-size': `${fontSize}px`,
+              'font-weight': 700,
               'text-valign': 'center',
               'text-halign': 'center',
-              'width': 50,
-              'height': 50,
               'text-wrap': 'ellipsis',
-              'text-max-width': '75px',
+              'text-max-width': `${Math.round(fontSize * 6.8)}px`,
+              'text-outline-width': Math.max(2, Math.round(fontSize * 0.18)),
+              'text-outline-color': 'data(nodeOutline)',
               'transition-property': 'background-color, border-color, width, height',
-              'transition-duration': 0.2,
+              'transition-duration': 0.15,
             },
           },
           // Address nodes
@@ -140,10 +160,8 @@ export const CytoscapeGraph: React.FC<Props> = ({
             selector: 'node[type = "address"]',
             style: {
               'shape': 'ellipse',
-              'border-color': '#06b6d4',
-              'background-color': '#082f49',
-              'width': 50,
-              'height': 50,
+              'width': Math.round(fontSize * 4.6),
+              'height': Math.round(fontSize * 4.6),
             },
           },
           // Transaction nodes
@@ -151,10 +169,8 @@ export const CytoscapeGraph: React.FC<Props> = ({
             selector: 'node[type = "transaction"]',
             style: {
               'shape': 'round-rectangle',
-              'border-color': '#8b5cf6',
-              'background-color': '#2e1065',
-              'width': 84,
-              'height': 38,
+              'width': Math.round(fontSize * 7.8),
+              'height': Math.round(fontSize * 3.4),
             },
           },
           // UTXO nodes
@@ -162,10 +178,8 @@ export const CytoscapeGraph: React.FC<Props> = ({
             selector: 'node[type = "utxo"]',
             style: {
               'shape': 'diamond',
-              'border-color': '#10b981',
-              'background-color': '#064e3b',
-              'width': 44,
-              'height': 44,
+              'width': Math.round(fontSize * 4.0),
+              'height': Math.round(fontSize * 4.0),
             },
           },
           // Coinbase nodes
@@ -173,31 +187,31 @@ export const CytoscapeGraph: React.FC<Props> = ({
             selector: 'node[type = "coinbase"]',
             style: {
               'shape': 'hexagon',
-              'border-color': '#f59e0b',
-              'background-color': '#78350f',
-              'width': 50,
-              'height': 50,
+              'width': Math.round(fontSize * 4.6),
+              'height': Math.round(fontSize * 4.6),
             },
           },
-          // Center / focused node (Glowing cyan halo)
+          // Center / focused node (Bitcoin Amber Glow Halo)
           {
             selector: 'node[?is_center]',
             style: {
               'border-width': 4,
-              'border-color': '#00f0ff',
+              'border-color': '#f59e0b',
               'border-style': 'solid',
-              'underlay-color': '#00f0ff',
-              'underlay-padding': 6,
-              'underlay-opacity': 0.3,
+              'underlay-color': '#f59e0b',
+              'underlay-padding': Math.round(fontSize * 0.6),
+              'underlay-opacity': 0.35,
             },
           },
           // Selected node
           {
             selector: 'node:selected',
             style: {
-              'border-width': 3,
-              'border-color': '#38bdf8',
-              'background-color': '#0284c7',
+              'border-width': 3.5,
+              'border-color': '#ffffff',
+              'underlay-color': '#ffffff',
+              'underlay-padding': 5,
+              'underlay-opacity': 0.25,
             },
           },
           // Edges
@@ -212,14 +226,17 @@ export const CytoscapeGraph: React.FC<Props> = ({
               'control-point-step-size': 40,
               'arrow-scale': 1.25,
               'label': 'data(label)',
-              'font-family': 'monospace',
-              'font-size': '10px',
-              'font-weight': 500,
-              'color': '#cbd5e1',
-              'text-background-color': '#070b14',
-              'text-background-opacity': 0.9,
-              'text-background-padding': '3px',
+              'font-family': 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+              'font-size': `${Math.max(9, fontSize - 1)}px`,
+              'font-weight': 600,
+              'color': '#f3f4f6',
+              'text-background-color': '#11141a',
+              'text-background-opacity': 0.95,
+              'text-background-padding': `${Math.max(3, Math.round(fontSize * 0.28))}px`,
               'text-background-shape': 'roundrectangle',
+              'text-border-width': 1,
+              'text-border-color': '#374151',
+              'text-border-opacity': 0.9,
               'text-rotation': 'autorotate',
             },
           },
@@ -227,21 +244,22 @@ export const CytoscapeGraph: React.FC<Props> = ({
             selector: 'edge[?is_center]',
             style: {
               'width': 2.5,
-              'line-color': '#0284c7',
-              'target-arrow-color': '#0284c7',
+              'line-color': '#f59e0b',
+              'target-arrow-color': '#f59e0b',
             },
           },
           {
             selector: 'edge:selected',
             style: {
               'width': 3.5,
-              'line-color': '#38bdf8',
-              'target-arrow-color': '#38bdf8',
-              'color': '#38bdf8',
+              'line-color': '#ffffff',
+              'target-arrow-color': '#ffffff',
+              'color': '#ffffff',
+              'text-border-color': '#ffffff',
             },
           },
         ],
-        layout: getLayoutOptions(layout) as any,
+        layout: getLayoutOptions(layout, fontSize) as any,
       });
 
       cy.on('tap', 'node', (evt: EventObject) => {
@@ -289,7 +307,7 @@ export const CytoscapeGraph: React.FC<Props> = ({
         cyRef.current?.destroy();
       } catch {}
     };
-  }, [data, layout]);
+  }, [data, layout, fontSize, colorMode]);
 
   // Handle selectedId highlighting
   useEffect(() => {
@@ -318,18 +336,18 @@ export const CytoscapeGraph: React.FC<Props> = ({
   };
 
   const handleFit = () => {
-    cyRef.current?.fit(undefined, 80);
+    cyRef.current?.fit(undefined, 70);
   };
 
   const handleResetLayout = () => {
     if (!cyRef.current) return;
-    const l = cyRef.current.layout(getLayoutOptions(layout) as any);
+    const l = cyRef.current.layout(getLayoutOptions(layout, fontSize) as any);
     l.run();
   };
 
   const handleExportPNG = () => {
     if (!cyRef.current) return;
-    const png = cyRef.current.png({ full: true, bg: '#070b14', scale: 2 });
+    const png = cyRef.current.png({ full: true, bg: '#0c0e12', scale: 2 });
     const a = document.createElement('a');
     a.href = png;
     a.download = `chainscope-flow-${Date.now()}.png`;
@@ -337,67 +355,119 @@ export const CytoscapeGraph: React.FC<Props> = ({
   };
 
   return (
-    <div className="w-full h-full relative overflow-hidden bg-[#070b14]">
+    <div className="w-full h-full relative overflow-hidden bg-[#0c0e12]">
       {/* Cytoscape Canvas Container */}
       <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
       {/* Floating Canvas Controls Overlay */}
-      <div className="absolute top-4 right-4 flex flex-col gap-1.5 z-10 bg-slate-900/90 backdrop-blur-xs p-1.5 rounded-lg border border-slate-800 shadow-xl">
+      <div className="absolute top-4 right-4 flex flex-col gap-1.5 z-10 bg-[#12151c]/95 backdrop-blur-xs p-1.5 rounded-lg border border-slate-700/80 shadow-xl">
         <button
           onClick={handleZoomIn}
-          className="p-2 text-slate-300 hover:text-white hover:bg-slate-850 rounded transition-colors"
+          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors cursor-pointer"
           title="Zoom in"
         >
-          <ZoomIn size={16} />
+          <ZoomIn size={15} />
         </button>
         <button
           onClick={handleZoomOut}
-          className="p-2 text-slate-300 hover:text-white hover:bg-slate-850 rounded transition-colors"
+          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors cursor-pointer"
           title="Zoom out"
         >
-          <ZoomOut size={16} />
+          <ZoomOut size={15} />
         </button>
         <button
           onClick={handleFit}
-          className="p-2 text-slate-300 hover:text-white hover:bg-slate-850 rounded transition-colors"
+          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors cursor-pointer"
           title="Fit view to canvas"
         >
-          <Maximize2 size={16} />
+          <Maximize2 size={15} />
         </button>
         <button
           onClick={handleResetLayout}
-          className="p-2 text-slate-300 hover:text-white hover:bg-slate-850 rounded transition-colors"
+          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors cursor-pointer"
           title="Re-run layout calculation"
         >
-          <RotateCcw size={16} />
+          <RotateCcw size={15} />
         </button>
-        <div className="h-px bg-slate-800 my-1" />
+
+        <div className="h-px bg-slate-800 my-0.5" />
+
+        {/* Text Size Quick Increment / Decrement */}
+        {onFontSizeChange && (
+          <>
+            <button
+              onClick={() => onFontSizeChange(Math.min(18, fontSize + 2))}
+              className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors cursor-pointer font-bold text-xs font-mono"
+              title="Increase text size"
+            >
+              A+
+            </button>
+            <button
+              onClick={() => onFontSizeChange(Math.max(8, fontSize - 2))}
+              className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors cursor-pointer font-bold text-xs font-mono"
+              title="Decrease text size"
+            >
+              A-
+            </button>
+            <div className="h-px bg-slate-800 my-0.5" />
+          </>
+        )}
+
+        {/* Color Mode Toggle */}
+        {onColorModeChange && (
+          <button
+            onClick={() => onColorModeChange(colorMode === 'hash' ? 'type' : 'hash')}
+            className={`p-2 rounded transition-colors cursor-pointer ${
+              colorMode === 'hash'
+                ? 'text-amber-400 bg-amber-950/40 border border-amber-800/60'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800'
+            }`}
+            title={`Toggle Color Mode (Current: ${colorMode === 'hash' ? 'Address Hash Spectrum' : 'Entity Type'})`}
+          >
+            <Palette size={15} />
+          </button>
+        )}
+
         <button
           onClick={handleExportPNG}
-          className="p-2 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-950/60 rounded transition-colors"
+          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors cursor-pointer"
           title="Export high-res PNG"
         >
-          <Download size={16} />
+          <Download size={15} />
         </button>
       </div>
 
       {/* Mini Legend Overlay */}
-      <div className="absolute bottom-4 left-4 z-10 bg-slate-950/85 backdrop-blur-xs px-3 py-2 rounded-lg border border-slate-800 text-[10px] font-mono flex items-center gap-3 text-slate-400 pointer-events-none shadow-md">
-        <div className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-cyan-500 border border-cyan-400" />
-          <span>Address</span>
+      <div className="absolute bottom-4 left-4 z-10 bg-[#12151c]/95 backdrop-blur-xs px-3.5 py-2 rounded-lg border border-slate-700/80 text-[11px] font-mono flex items-center gap-4 text-slate-300 pointer-events-none shadow-lg">
+        {colorMode === 'hash' ? (
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-gradient-to-r from-amber-400 via-emerald-400 to-indigo-400 border border-white/60" />
+            <span className="font-semibold text-slate-200">Hash-Mapped Spectrum</span>
+            <span className="text-[10px] text-slate-400 font-mono">(Unique Color per Address)</span>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-sky-500 border border-sky-300" />
+              <span className="font-semibold text-slate-200">Address</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-4 rounded-xs bg-purple-500 border border-purple-300" />
+              <span className="font-semibold text-slate-200">Transaction</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rotate-45 bg-emerald-500 border border-emerald-300" />
+              <span className="font-semibold text-slate-200">UTXO</span>
+            </div>
+          </>
+        )}
+        <div className="flex items-center gap-1.5 border-l border-slate-700/80 pl-3">
+          <span className="h-2.5 w-2.5 rounded-full border-2 border-amber-400 bg-amber-950/60" />
+          <span className="font-semibold text-amber-300">Center Focus</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="h-2.5 w-4 rounded-xs bg-purple-600 border border-purple-400" />
-          <span>Transaction</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rotate-45 bg-emerald-600 border border-emerald-400" />
-          <span>UTXO</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full border-2 border-cyan-300" />
-          <span>Center Focus</span>
+        <div className="flex items-center gap-1 text-slate-400 text-[10px] border-l border-slate-700/80 pl-3">
+          <Type size={11} className="text-slate-400" />
+          <span>{fontSize}px</span>
         </div>
       </div>
     </div>

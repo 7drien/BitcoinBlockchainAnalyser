@@ -111,26 +111,27 @@ async def get_graph(
         except Exception:
             pass
 
-        db_txs = await _fetch_transactions_for_address(db, address, limit=20)
+        addr_limit = min(max_nodes, 50 if depth == 1 else 75)
+        db_txs = await _fetch_transactions_for_address(db, address, limit=addr_limit)
         for t in db_txs:
             tx_map[t.txid] = t
 
-        if depth >= 2 and len(tx_map) < 30:
-            # Expand counterparties
-            counterparty_addrs: set[str] = set()
-            for t in list(tx_map.values())[:6]:
-                for inp in t.inputs:
-                    if inp.address and inp.address != address and inp.address != "Coinbase Reward":
-                        counterparty_addrs.add(inp.address)
-                for out in t.outputs:
-                    if out.address and out.address != address:
-                        counterparty_addrs.add(out.address)
-
-            for cp in list(counterparty_addrs)[:5]:
-                cp_txs = await _fetch_transactions_for_address(db, cp, limit=2)
-                for t in cp_txs:
-                    if t.txid not in tx_map:
-                        tx_map[t.txid] = t
+        if depth >= 2 and len(tx_map) < max_nodes:
+            # Multi-hop trace: trace funding parents of the incoming transactions
+            # so the graph shows where the coins came from before reaching this address!
+            for t in list(tx_map.values())[:15]:
+                if len(tx_map) >= max_nodes:
+                    break
+                if direction in ("upstream", "both"):
+                    parents = await live_sync.get_parent_transactions(db, t, limit=2)
+                    for p in parents:
+                        if p.txid not in tx_map:
+                            tx_map[p.txid] = p
+                if direction in ("downstream", "both"):
+                    children = await live_sync.get_child_transactions(db, t, limit=2)
+                    for c in children:
+                        if c.txid not in tx_map:
+                            tx_map[c.txid] = c
 
     else:
         # No subject: fetch recent transactions

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { SlidersHorizontal, ActivitySquare, FileText, Play, RotateCcw, ArrowUpRight, Search } from 'lucide-react';
+import { SlidersHorizontal, ActivitySquare, FileText, Play, RotateCcw, ArrowUpRight, Search, CornerDownLeft } from 'lucide-react';
 import type { Investigation } from '../types';
+import { getNodeColors } from '../lib/colors';
 
 interface Props {
   investigation: Investigation | null;
@@ -8,6 +9,7 @@ interface Props {
   onToggleHeuristic: (name: string) => void;
   onRunAnalysis: () => void;
   isAnalyzing: boolean;
+  isFiltering?: boolean;
   onApplyFilter: (filters: any) => void;
   onSelectTransaction: (txid: string) => void;
   filterResults?: any[];
@@ -20,6 +22,7 @@ export const LeftSidebar: React.FC<Props> = ({
   onToggleHeuristic,
   onRunAnalysis,
   isAnalyzing,
+  isFiltering = false,
   onApplyFilter,
   onSelectTransaction,
   filterResults = [],
@@ -84,6 +87,13 @@ export const LeftSidebar: React.FC<Props> = ({
     });
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleFilterSubmit();
+    }
+  };
+
   const handleResetFilter = () => {
     setFilterAddress('');
     setMinAmount('');
@@ -105,40 +115,40 @@ export const LeftSidebar: React.FC<Props> = ({
   };
 
   return (
-    <aside className="w-84 border-r border-slate-800 bg-[#090d16] flex flex-col select-none text-xs font-sans">
+    <aside className="w-84 border-r border-slate-800 bg-[#0e1117] flex flex-col select-none text-xs font-sans shadow-sm">
       {/* Sidebar Tab Switcher */}
-      <div className="flex border-b border-slate-800 bg-slate-950/70 p-1.5 gap-1">
+      <div className="flex border-b border-slate-800 bg-[#0a0d13] p-1.5 gap-1">
         <button
           onClick={() => setActiveTab('filter')}
-          className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 rounded transition-colors font-medium text-xs ${
+          className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 rounded transition-all font-semibold text-xs cursor-pointer ${
             activeTab === 'filter'
-              ? 'bg-slate-800 text-cyan-400 font-semibold shadow-xs'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+              ? 'bg-[#1a1e28] text-amber-400 border border-slate-700 shadow-xs'
+              : 'text-slate-400 hover:text-white hover:bg-[#14171f]'
           }`}
         >
-          <SlidersHorizontal size={13} />
+          <SlidersHorizontal size={13} className={activeTab === 'filter' ? 'text-amber-400' : 'text-slate-400'} />
           <span>Filters</span>
         </button>
         <button
           onClick={() => setActiveTab('heuristics')}
-          className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 rounded transition-colors font-medium text-xs ${
+          className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 rounded transition-all font-semibold text-xs cursor-pointer ${
             activeTab === 'heuristics'
-              ? 'bg-slate-800 text-cyan-400 font-semibold shadow-xs'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+              ? 'bg-[#1a1e28] text-amber-400 border border-slate-700 shadow-xs'
+              : 'text-slate-400 hover:text-white hover:bg-[#14171f]'
           }`}
         >
-          <ActivitySquare size={13} />
+          <ActivitySquare size={13} className={activeTab === 'heuristics' ? 'text-amber-400' : 'text-slate-400'} />
           <span>Forensics</span>
         </button>
         <button
           onClick={() => setActiveTab('dossier')}
-          className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 rounded transition-colors font-medium text-xs ${
+          className={`flex-1 py-1.5 flex items-center justify-center gap-1.5 rounded transition-all font-semibold text-xs cursor-pointer ${
             activeTab === 'dossier'
-              ? 'bg-slate-800 text-cyan-400 font-semibold shadow-xs'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+              ? 'bg-[#1a1e28] text-amber-400 border border-slate-700 shadow-xs'
+              : 'text-slate-400 hover:text-white hover:bg-[#14171f]'
           }`}
         >
-          <FileText size={13} />
+          <FileText size={13} className={activeTab === 'dossier' ? 'text-amber-400' : 'text-slate-400'} />
           <span>Dossier</span>
         </button>
       </div>
@@ -146,35 +156,34 @@ export const LeftSidebar: React.FC<Props> = ({
       {/* Tab 1: Parametric Query Filter */}
       {activeTab === 'filter' && (
         <div className="flex-1 overflow-y-auto flex flex-col">
-          <form onSubmit={handleFilterSubmit} className="p-3.5 space-y-3 border-b border-slate-800/80">
+          <form onSubmit={handleFilterSubmit} className="p-3.5 space-y-3.5 border-b border-slate-800/90 bg-[#0c0f15]/50">
             {/* Address Search */}
             <div>
-              <label className="text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1 block">
+              <label className="text-[10px] font-mono text-slate-300 uppercase tracking-wider font-semibold mb-1 block">
                 Address Filter
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="e.g. bc1q... or 1..."
-                  value={filterAddress}
-                  onChange={(e) => setFilterAddress(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30"
-                />
-              </div>
+              <input
+                type="text"
+                placeholder="e.g. bc1q... or 1..."
+                value={filterAddress}
+                onChange={(e) => setFilterAddress(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="w-full bg-[#14171f] border border-slate-700/80 rounded px-2.5 py-1.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition-colors"
+              />
             </div>
 
             {/* Amount Range with Unit Selector */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
+                <label className="text-[10px] font-mono text-slate-300 uppercase tracking-wider font-semibold">
                   Total Output Amount
                 </label>
-                <div className="flex items-center rounded border border-slate-800 overflow-hidden text-[10px] font-mono">
+                <div className="flex items-center rounded border border-slate-700 overflow-hidden text-[10px] font-mono bg-[#14171f]">
                   <button
                     type="button"
                     onClick={() => setAmountUnit('btc')}
-                    className={`px-2 py-0.5 transition-colors ${
-                      amountUnit === 'btc' ? 'bg-cyan-900/50 text-cyan-300 font-bold' : 'text-slate-500 hover:text-slate-300'
+                    className={`px-2 py-0.5 transition-colors cursor-pointer ${
+                      amountUnit === 'btc' ? 'bg-slate-200 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
                     BTC
@@ -182,8 +191,8 @@ export const LeftSidebar: React.FC<Props> = ({
                   <button
                     type="button"
                     onClick={() => setAmountUnit('sats')}
-                    className={`px-2 py-0.5 transition-colors ${
-                      amountUnit === 'sats' ? 'bg-cyan-900/50 text-cyan-300 font-bold' : 'text-slate-500 hover:text-slate-300'
+                    className={`px-2 py-0.5 transition-colors cursor-pointer ${
+                      amountUnit === 'sats' ? 'bg-slate-200 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
                     Sats
@@ -197,7 +206,8 @@ export const LeftSidebar: React.FC<Props> = ({
                   placeholder={amountUnit === 'btc' ? 'Min (e.g. 0.001)' : 'Min sats'}
                   value={minAmount}
                   onChange={(e) => setMinAmount(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                  onKeyDown={handleKeyDown}
+                  className="bg-[#14171f] border border-slate-700/80 rounded px-2 py-1.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition-colors"
                 />
                 <input
                   type="number"
@@ -205,23 +215,24 @@ export const LeftSidebar: React.FC<Props> = ({
                   placeholder={amountUnit === 'btc' ? 'Max (e.g. 5.0)' : 'Max sats'}
                   value={maxAmount}
                   onChange={(e) => setMaxAmount(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                  onKeyDown={handleKeyDown}
+                  className="bg-[#14171f] border border-slate-700/80 rounded px-2 py-1.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition-colors"
                 />
               </div>
             </div>
 
             {/* Pattern Filter */}
             <div>
-              <label className="text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1 block">
+              <label className="text-[10px] font-mono text-slate-300 uppercase tracking-wider font-semibold mb-1 block">
                 Forensic Pattern
               </label>
               <select
                 value={selectedPattern}
                 onChange={(e) => setSelectedPattern(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500"
+                className="w-full bg-[#14171f] border border-slate-700/80 rounded px-2.5 py-1.5 text-xs font-mono text-slate-100 font-medium focus:outline-none focus:border-amber-500 cursor-pointer"
               >
                 <option value="all">All Transactions</option>
-                <option value="peel">Peel Chain (1 input, 2 outputs)</option>
+                <option value="peel">Peel Chain (1 in, 2 out)</option>
                 <option value="consolidation">Consolidation (&ge;2 in, &le;2 out)</option>
                 <option value="batch">Batch Distribution (&le;3 in, &ge;3 out)</option>
                 <option value="coinjoin">CoinJoin-like (&ge;3 in, &ge;3 out)</option>
@@ -230,7 +241,7 @@ export const LeftSidebar: React.FC<Props> = ({
 
             {/* Block Height Range */}
             <div>
-              <label className="text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1 block">
+              <label className="text-[10px] font-mono text-slate-300 uppercase tracking-wider font-semibold mb-1 block">
                 Block Height Range
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -239,14 +250,16 @@ export const LeftSidebar: React.FC<Props> = ({
                   placeholder="Min Height"
                   value={minHeight}
                   onChange={(e) => setMinHeight(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                  onKeyDown={handleKeyDown}
+                  className="bg-[#14171f] border border-slate-700/80 rounded px-2 py-1.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition-colors"
                 />
                 <input
                   type="number"
                   placeholder="Max Height"
                   value={maxHeight}
                   onChange={(e) => setMaxHeight(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                  onKeyDown={handleKeyDown}
+                  className="bg-[#14171f] border border-slate-700/80 rounded px-2 py-1.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition-colors"
                 />
               </div>
             </div>
@@ -254,7 +267,7 @@ export const LeftSidebar: React.FC<Props> = ({
             {/* Input / Output Counts */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1 block">
+                <label className="text-[10px] font-mono text-slate-300 uppercase tracking-wider font-semibold mb-1 block">
                   Inputs (Min/Max)
                 </label>
                 <div className="flex gap-1">
@@ -263,19 +276,21 @@ export const LeftSidebar: React.FC<Props> = ({
                     placeholder="Min"
                     value={minInputs}
                     onChange={(e) => setMinInputs(e.target.value)}
-                    className="w-1/2 bg-slate-950 border border-slate-800 rounded px-1.5 py-1 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                    onKeyDown={handleKeyDown}
+                    className="w-1/2 bg-[#14171f] border border-slate-700/80 rounded px-1.5 py-1 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
                   />
                   <input
                     type="number"
                     placeholder="Max"
                     value={maxInputs}
                     onChange={(e) => setMaxInputs(e.target.value)}
-                    className="w-1/2 bg-slate-950 border border-slate-800 rounded px-1.5 py-1 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                    onKeyDown={handleKeyDown}
+                    className="w-1/2 bg-[#14171f] border border-slate-700/80 rounded px-1.5 py-1 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
                   />
                 </div>
               </div>
               <div>
-                <label className="text-[10px] font-mono text-slate-400 uppercase tracking-wider mb-1 block">
+                <label className="text-[10px] font-mono text-slate-300 uppercase tracking-wider font-semibold mb-1 block">
                   Outputs (Min/Max)
                 </label>
                 <div className="flex gap-1">
@@ -284,14 +299,16 @@ export const LeftSidebar: React.FC<Props> = ({
                     placeholder="Min"
                     value={minOutputs}
                     onChange={(e) => setMinOutputs(e.target.value)}
-                    className="w-1/2 bg-slate-950 border border-slate-800 rounded px-1.5 py-1 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                    onKeyDown={handleKeyDown}
+                    className="w-1/2 bg-[#14171f] border border-slate-700/80 rounded px-1.5 py-1 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
                   />
                   <input
                     type="number"
                     placeholder="Max"
                     value={maxOutputs}
                     onChange={(e) => setMaxOutputs(e.target.value)}
-                    className="w-1/2 bg-slate-950 border border-slate-800 rounded px-1.5 py-1 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                    onKeyDown={handleKeyDown}
+                    className="w-1/2 bg-[#14171f] border border-slate-700/80 rounded px-1.5 py-1 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
                   />
                 </div>
               </div>
@@ -301,15 +318,24 @@ export const LeftSidebar: React.FC<Props> = ({
             <div className="flex items-center gap-2 pt-1">
               <button
                 type="submit"
-                className="flex-1 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white font-medium rounded flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-xs shadow-xs"
+                disabled={isFiltering}
+                className="flex-1 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-slate-950 font-bold rounded flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-xs shadow-xs"
               >
-                <Search size={13} />
-                <span>Apply Filter</span>
+                {isFiltering ? (
+                  <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-slate-950" />
+                ) : (
+                  <>
+                    <Search size={13} />
+                    <span>Apply Filter</span>
+                    <CornerDownLeft size={11} className="text-slate-950" />
+                  </>
+                )}
               </button>
               <button
                 type="button"
                 onClick={handleResetFilter}
-                className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 rounded flex items-center justify-center transition-colors cursor-pointer"
+                disabled={isFiltering}
+                className="px-3 py-2 bg-[#181c26] hover:bg-[#202533] disabled:opacity-50 text-slate-300 hover:text-white border border-slate-700 rounded flex items-center justify-center transition-colors cursor-pointer"
                 title="Reset Filters"
               >
                 <RotateCcw size={13} />
@@ -318,40 +344,55 @@ export const LeftSidebar: React.FC<Props> = ({
           </form>
 
           {/* Filter Matching Results List */}
-          <div className="flex-1 p-3 overflow-y-auto space-y-1.5">
-            <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 px-1 pb-1 border-b border-slate-850">
+          <div className="flex-1 p-3 overflow-y-auto space-y-2">
+            <div className="flex items-center justify-between text-[11px] font-mono text-slate-300 px-1 pb-1 border-b border-slate-800 font-semibold">
               <span>MATCHING TRANSACTIONS</span>
-              <span className="font-semibold text-cyan-400">{filterResults.length}</span>
+              <span className="px-2 py-0.2 rounded bg-[#181c26] text-amber-400 border border-amber-600/40 text-[10px] font-bold">
+                {filterResults.length}
+              </span>
             </div>
 
             {filterResults.length === 0 ? (
-              <div className="py-8 text-center text-slate-600 font-mono text-[11px]">
+              <div className="py-8 text-center text-slate-400 font-mono text-[11px]">
                 No active filter matches found.
               </div>
             ) : (
-              filterResults.map((tx) => (
-                <div
-                  key={tx.txid}
-                  onClick={() => onSelectTransaction(tx.txid)}
-                  className="p-2 rounded bg-slate-950/60 hover:bg-slate-900 border border-slate-850/80 hover:border-cyan-800/60 transition-all cursor-pointer group"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-mono text-[11px] text-cyan-300 group-hover:text-cyan-200 font-semibold truncate max-w-[170px]">
-                      {tx.txid.slice(0, 10)}...{tx.txid.slice(-8)}
-                    </span>
-                    <ArrowUpRight size={12} className="text-slate-600 group-hover:text-cyan-400 transition-colors" />
+              filterResults.map((tx) => {
+                const txColors = getNodeColors({ type: 'transaction', full_id: tx.txid }, 'hash');
+                return (
+                  <div
+                    key={tx.txid}
+                    onClick={() => onSelectTransaction(tx.txid)}
+                    className="p-2.5 rounded-lg bg-[#14171f] hover:bg-[#1c222e] border border-slate-800 hover:border-slate-600 transition-all cursor-pointer group shadow-xs"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5 truncate max-w-[170px]">
+                        <span className="h-2 w-2 rounded-xs shrink-0" style={{ backgroundColor: txColors.border }} />
+                        <span className="font-mono text-[11px] text-white group-hover:text-amber-400 font-bold truncate">
+                          {tx.txid.slice(0, 10)}...{tx.txid.slice(-8)}
+                        </span>
+                      </div>
+                      <ArrowUpRight size={13} className="text-slate-400 group-hover:text-amber-400 transition-colors" />
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] font-mono text-slate-300">
+                      <span className="font-medium">Block {tx.block_height ?? '---'}</span>
+                      <span className="text-white font-bold">
+                        {tx.total_output_sats ? (tx.total_output_sats / 100_000_000).toFixed(4) : '0.0000'} BTC
+                      </span>
+                    </div>
+                    <div className="text-[10px] font-mono text-slate-400 mt-1 flex items-center justify-between">
+                      <span>
+                        <span className="text-slate-300 font-semibold">{tx.input_count ?? 1} in</span>
+                        <span className="mx-1">&rarr;</span>
+                        <span className="text-slate-300 font-semibold">{tx.output_count ?? 2} out</span>
+                      </span>
+                      <span className="text-emerald-400 font-medium">
+                        {tx.fee_rate ? `${tx.fee_rate} sat/vB` : ''}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
-                    <span>Block {tx.block_height ?? '---'}</span>
-                    <span className="text-slate-200 font-medium">
-                      {tx.total_output_sats ? (tx.total_output_sats / 100_000_000).toFixed(4) : '0.0000'} BTC
-                    </span>
-                  </div>
-                  <div className="text-[10px] font-mono text-slate-500 mt-0.5">
-                    {tx.input_count ?? 1} in &rarr; {tx.output_count ?? 2} out
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -360,12 +401,12 @@ export const LeftSidebar: React.FC<Props> = ({
       {/* Tab 2: Forensic Heuristics */}
       {activeTab === 'heuristics' && (
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="p-3 border-b border-slate-800 bg-slate-950/50 flex items-center justify-between">
-            <span className="text-[11px] font-mono text-slate-400 uppercase">12 HEURISTIC RULES</span>
+          <div className="p-3 border-b border-slate-800 bg-[#0a0d13] flex items-center justify-between">
+            <span className="text-[11px] font-mono text-slate-300 uppercase font-semibold">12 FORENSIC RULES</span>
             <button
               onClick={onRunAnalysis}
               disabled={isAnalyzing}
-              className="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white rounded font-mono font-semibold text-[10px] flex items-center gap-1 shadow-xs cursor-pointer"
+              className="px-3 py-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 rounded font-mono font-bold text-[10px] flex items-center gap-1 shadow-xs cursor-pointer"
             >
               <Play size={10} />
               <span>{isAnalyzing ? 'ANALYZING...' : 'RUN LIVE'}</span>
@@ -381,31 +422,31 @@ export const LeftSidebar: React.FC<Props> = ({
                   onClick={() => onToggleHeuristic(h.id)}
                   className={`p-2.5 rounded-lg border transition-all cursor-pointer ${
                     isEnabled
-                      ? 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
-                      : 'bg-slate-950/40 border-slate-900 opacity-60'
+                      ? 'bg-[#14171f] border-slate-700/80 hover:border-slate-600 shadow-xs'
+                      : 'bg-slate-950/40 border-slate-900 opacity-50'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2 font-medium text-slate-200">
+                    <div className="flex items-center gap-2 font-semibold text-white">
                       <input
                         type="checkbox"
                         checked={isEnabled}
                         onChange={() => {}}
-                        className="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0 cursor-pointer"
+                        className="rounded bg-slate-800 border-slate-600 text-amber-500 focus:ring-0 cursor-pointer h-3.5 w-3.5"
                       />
-                      <span>{h.label}</span>
+                      <span className="text-xs">{h.label}</span>
                     </div>
                     <span
-                      className={`text-[9px] font-mono px-1.5 py-0.2 rounded uppercase ${
+                      className={`text-[9px] font-mono px-1.5 py-0.2 rounded uppercase font-bold ${
                         h.severity === 'warning'
-                          ? 'bg-amber-950 text-amber-400 border border-amber-800/60'
-                          : 'bg-blue-950 text-blue-400 border border-blue-800/60'
+                          ? 'bg-amber-950/60 text-amber-300 border border-amber-800/80'
+                          : 'bg-slate-800 text-slate-300 border border-slate-700'
                       }`}
                     >
                       {h.severity}
                     </span>
                   </div>
-                  <p className="text-[10px] text-slate-400 pl-5">{h.desc}</p>
+                  <p className="text-[10px] text-slate-400 pl-5.5 leading-relaxed">{h.desc}</p>
                 </div>
               );
             })}
@@ -416,38 +457,40 @@ export const LeftSidebar: React.FC<Props> = ({
       {/* Tab 3: Forensic Dossier Export */}
       {activeTab === 'dossier' && (
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-3 space-y-2">
+          <div className="bg-[#14171f] border border-slate-700/80 rounded-lg p-3 space-y-2 shadow-xs">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono text-cyan-400 uppercase font-semibold">ACTIVE SESSION</span>
+              <span className="text-[10px] font-mono text-amber-400 uppercase font-bold">ACTIVE SESSION</span>
               {investigation?.id && (
-                <span className="text-[10px] font-mono text-slate-500">REF #{investigation.id}</span>
+                <span className="text-[10px] font-mono text-slate-400 font-semibold">REF #{investigation.id}</span>
               )}
             </div>
-            <h3 className="font-semibold text-sm text-slate-100">
+            <h3 className="font-bold text-sm text-white">
               {investigation?.name || 'Local Forensic Investigation'}
             </h3>
             {selectedSubject && (
-              <div className="py-1 px-2 rounded bg-slate-950 border border-slate-800 text-[10px] font-mono text-cyan-400 truncate">
+              <div className="py-1 px-2 rounded bg-[#0d1016] border border-slate-700 text-[10px] font-mono text-amber-400 truncate">
                 Target: {selectedSubject}
               </div>
             )}
             {investigation?.snapshot_height ? (
-              <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] font-mono text-slate-400">
+              <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] font-mono text-slate-300">
                 <span>SNAPSHOT HEIGHT:</span>
-                <span className="text-slate-200 font-bold">{investigation.snapshot_height}</span>
+                <span className="text-white font-bold">#{investigation.snapshot_height.toLocaleString()}</span>
               </div>
             ) : null}
           </div>
 
           {/* Analyst Notes */}
           <div>
-            <label className="text-[11px] font-mono text-slate-400 uppercase mb-1.5 block">Session Notes</label>
+            <label className="text-[11px] font-mono text-slate-300 uppercase font-semibold mb-1.5 block">
+              Session Notes
+            </label>
             <textarea
               rows={4}
               placeholder="Enter analyst observations, transaction cluster notes, or investigation context..."
               value={analystNotes}
               onChange={(e) => setAnalystNotes(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-md p-2.5 text-xs text-slate-200 font-sans focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/40 resize-none"
+              className="w-full bg-[#14171f] border border-slate-700 rounded-md p-2.5 text-xs text-white font-sans focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/40 resize-none transition-colors"
             />
           </div>
 
@@ -455,13 +498,13 @@ export const LeftSidebar: React.FC<Props> = ({
           {investigation?.id ? (
             <button
               onClick={handleOpenReport}
-              className="w-full py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold rounded-md shadow-lg shadow-cyan-900/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              className="w-full py-2.5 bg-slate-100 hover:bg-white text-slate-950 font-bold rounded-md shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <FileText size={14} />
               <span>Generate Forensic Dossier</span>
             </button>
           ) : (
-            <div className="text-[11px] text-slate-500 font-mono text-center py-2 bg-slate-950/60 rounded border border-slate-800/80">
+            <div className="text-[11px] text-slate-400 font-mono text-center py-2.5 bg-[#14171f] rounded border border-slate-800">
               Select or inspect a transaction to attach findings to a dossier.
             </div>
           )}
