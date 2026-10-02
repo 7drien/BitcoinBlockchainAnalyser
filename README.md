@@ -12,6 +12,10 @@
 
 ---
 
+<p align="center">
+  <img src="ChainScope_github.png" alt="Bitcoin Blockchain Dashboard" width="100%" />
+</p>
+
 ## Table of Contents
 
 - [Overview](#overview)
